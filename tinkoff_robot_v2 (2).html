@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Robot v2 — Multi-Ticker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@300;400;600&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --surface:  #111418;
+    --card:     #161b22;
+    --card2:    #1a2030;
+    --border:   rgba(255,255,255,0.07);
+    --border2:  rgba(255,255,255,0.13);
+    --text:     #e8ecf0;
+    --muted:    #5a6472;
+    --green:    #00e676;
+    --green-dim:#00c853;
+    --red:      #ff3d57;
+    --amber:    #ffab00;
+    --blue:     #448aff;
+    --accent:   #00e5ff;
+    --mono:     'JetBrains Mono', monospace;
+    --display:  'Unbounded', sans-serif;
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--mono); min-height:100vh; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:999;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.025) 2px,rgba(0,0,0,0.025) 4px); }
+
+  .app { max-width:1300px; margin:0 auto; padding:24px 20px; }
+
+  /* HEADER */
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon { width:42px; height:42px; border:1.5px solid var(--red); border-radius:8px; display:flex; align-items:center; justify-content:center; background:rgba(255,61,87,0.08); }
+  .logo-title { font-family:var(--display); font-size:14px; font-weight:600; letter-spacing:0.05em; }
+  .logo-sub { font-size:10px; color:var(--muted); letter-spacing:0.08em; margin-top:2px; }
+  .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .status-pill { display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--border2); border-radius:20px; padding:6px 14px; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; transition:background .3s; }
+  .status-dot.live    { background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s infinite; }
+  .status-dot.running { background:var(--amber); box-shadow:0 0 8px var(--amber); animation:pulse .9s infinite; }
+  .status-text { font-size:11px; color:var(--muted); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .sandbox-badge { background:rgba(255,171,0,0.15); border:1px solid rgba(255,171,0,0.35); border-radius:4px; padding:4px 10px; font-size:10px; color:var(--amber); font-weight:600; letter-spacing:.06em; }
+
+  /* LAYOUT */
+  .two-col { display:grid; grid-template-columns:340px 1fr; gap:16px; align-items:start; }
+  @media(max-width:900px){ .two-col{grid-template-columns:1fr;} }
+
+  /* CARDS */
+  .card { background:var(--card); border:1px solid var(--border2); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .card:last-child { margin-bottom:0; }
+  .card-title { font-family:var(--display); font-size:9px; font-weight:600; color:var(--accent); letter-spacing:.14em; margin-bottom:14px; }
+
+  /* WARNING */
+  .warning-banner { background:rgba(255,171,0,0.07); border:1px solid rgba(255,171,0,0.28); border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; gap:10px; align-items:flex-start; }
+  .warning-text { font-size:11px; color:var(--amber); line-height:1.8; }
+  .warning-text b { color:#ffcc40; }
+
+  /* INPUTS */
+  .input { background:var(--surface); border:1px solid var(--border2); border-radius:6px; padding:9px 12px; font-family:var(--mono); font-size:12px; color:var(--text); outline:none; width:100%; transition:border-color .15s; }
+  .input:focus { border-color:var(--accent); }
+  .input::placeholder { color:var(--muted); }
+  select.input { cursor:pointer; }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field-label { font-size:10px; color:var(--muted); letter-spacing:.06em; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px; }
+  @media(max-width:600px){ .grid2,.grid3{grid-template-columns:1fr;} }
+
+  /* BUTTONS */
+  .btn { background:transparent; border:1px solid var(--accent); color:var(--accent); font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.08em; padding:9px 18px; border-radius:6px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .btn:hover { background:rgba(0,229,255,0.08); }
+  .btn:active { transform:scale(.97); }
+  .btn:disabled { opacity:.38; cursor:not-allowed; }
+  .btn.g { border-color:var(--green); color:var(--green); }
+  .btn.g:hover { background:rgba(0,230,118,0.08); }
+  .btn.r { border-color:var(--red); color:var(--red); }
+  .btn.r:hover { background:rgba(255,61,87,0.08); }
+  .btn.a { border-color:var(--amber); color:var(--amber); }
+  .btn.a:hover { background:rgba(255,171,0,0.08); }
+  .btn.big { padding:11px 26px; font-size:12px; }
+
+  /* TOGGLE */
+  .toggle-row { display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+  .toggle-sw { width:38px; height:20px; background:var(--border2); border-radius:10px; position:relative; transition:background .2s; flex-shrink:0; }
+  .toggle-sw.on { background:var(--accent); }
+  .toggle-sw::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; transition:transform .2s; }
+  .toggle-sw.on::after { transform:translateX(18px); }
+  .toggle-label { font-size:11px; color:var(--muted); }
+
+  /* WATCHLIST */
+  .wl-input-row { display:flex; gap:8px; margin-bottom:10px; }
+  .wl-input-row input { flex:1; text-transform:uppercase; }
+  .wl-chips { display:flex; flex-wrap:wrap; gap:6px; min-height:32px; }
+  .chip { display:flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border2); border-radius:20px; padding:4px 10px 4px 12px; font-size:12px; font-weight:600; cursor:default; transition:border-color .15s; }
+  .chip.scanning  { border-color:var(--accent); color:var(--accent); }
+  .chip.has-long  { border-color:var(--green); color:var(--green); }
+  .chip.has-short { border-color:var(--red); color:var(--red); }
+  .chip.has-wait  { border-color:var(--border2); color:var(--muted); }
+  .chip-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+  .chip.scanning  .chip-dot { background:var(--accent); animation:pulse .8s infinite; }
+  .chip.has-long  .chip-dot { background:var(--green); }
+  .chip.has-short .chip-dot { background:var(--red); }
+  .chip-del { background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0; transition:color .15s; }
+  .chip-del:hover { color:var(--red); }
+  .preset-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .preset-btn { background:transparent; border:1px solid var(--border2); border-radius:4px; padding:3px 10px; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; transition:all .15s; }
+  .preset-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* SCANNER TABLE */
+  .scanner-grid { display:flex; flex-direction:column; gap:6px; }
+  .scan-row { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; display:grid; grid-template-columns:90px 70px 80px 1fr 90px; gap:10px; align-items:center; font-size:11px; transition:border-color .2s; cursor:pointer; }
+  .scan-row:hover { border-color:var(--border2); }
+  .scan-row.long  { border-left:3px solid var(--green); }
+  .scan-row.short { border-left:3px solid var(--red); }
+  .scan-row.wait  { border-left:3px solid var(--border2); }
+  .scan-row.scanning { border-left:3px solid var(--accent); }
+  .sr-ticker { font-size:13px; font-weight:700; color:var(--accent); }
+  .sr-price { color:var(--text); font-weight:600; }
+  .sr-signal { font-size:10px; font-weight:700; letter-spacing:.05em; }
+  .sr-signal.long  { color:var(--green); }
+  .sr-signal.short { color:var(--red); }
+  .sr-signal.wait  { color:var(--muted); }
+  .sr-signal.scanning { color:var(--accent); }
+  .sr-factors { display:flex; gap:4px; flex-wrap:wrap; }
+  .sf-pill { font-size:9px; padding:2px 6px; border-radius:3px; }
+  .sf-pill.bull { background:rgba(0,230,118,0.1); color:var(--green); }
+  .sf-pill.bear { background:rgba(255,61,87,0.1); color:var(--red); }
+  .sf-pill.neut { background:rgba(90,100,114,0.1); color:var(--muted); }
+  .sr-conf { font-size:11px; text-align:right; }
+  .sr-conf .conf-val { font-weight:700; }
+  .conf-bar { height:3px; border-radius:2px; background:var(--border2); margin-top:3px; overflow:hidden; }
+  .conf-fill { height:100%; border-radius:2px; transition:width .5s; }
+
+  /* METRICS */
+  .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-bottom:14px; }
+  .metric { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+  .metric-label { font-size:9px; color:var(--muted); letter-spacing:.08em; margin-bottom:5px; }
+  .metric-val { font-family:var(--display); font-size:20px; font-weight:600; }
+  .metric-val.g { color:var(--green); }
+  .metric-val.r { color:var(--red); }
+  .metric-val.a { color:var(--amber); }
+  .metric-val.c { color:var(--accent); }
+  .metric-sub { font-size:10px; color:var(--muted); margin-top:2px; }
+
+  /* POSITIONS */
+  .pos-item { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:12px 14px; margin-bottom:8px; }
+  .pos-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+  .pos-ticker { font-size:15px; font-weight:700; color:var(--accent); }
+  .pos-dir { font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; }
+  .pos-dir.long  { background:rgba(0,230,118,0.12); color:var(--green); }
+  .pos-dir.short { background:rgba(255,61,87,0.12);  color:var(--red); }
+  .pos-pnl { font-size:16px; font-weight:700; font-family:var(--display); }
+  .pos-details { display:flex; gap:14px; flex-wrap:wrap; font-size:10px; color:var(--muted); }
+  .pos-details b { color:var(--text); }
+  .pos-progress { height:3px; background:var(--border2); border-radius:2px; margin-top:6px; overflow:hidden; }
+  .pos-prog-fill { height:100%; border-radius:2px; transition:width .5s; }
+
+  /* TRADES TABLE */
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  th { color:var(--muted); font-weight:400; font-size:9px; letter-spacing:.06em; padding:0 8px 8px; text-align:left; border-bottom:1px solid var(--border); }
+  td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.04); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,0.015); }
+  .badge { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.05em; padding:2px 7px; border-radius:3px; }
+  .badge-buy  { background:rgba(0,230,118,0.12); color:var(--green);  border:1px solid rgba(0,230,118,0.2); }
+  .badge-sell { background:rgba(255,61,87,0.12);  color:var(--red);    border:1px solid rgba(255,61,87,0.2); }
+
+  /* LOG */
+  .log-body { font-size:11px; color:var(--muted); line-height:1.9; max-height:200px; overflow-y:auto; }
+  .log-body::-webkit-scrollbar { width:3px; }
+  .log-body::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+  .log-line { display:flex; gap:10px; border-bottom:1px solid rgba(255,255,255,0.025); padding:1px 0; }
+  .log-time { color:var(--muted); min-width:58px; flex-shrink:0; }
+  .log-msg.ok    { color:var(--green); }
+  .log-msg.err   { color:var(--red); }
+  .log-msg.info  { color:var(--accent); }
+  .log-msg.warn  { color:var(--amber); }
+  .log-msg.trade { color:#ff9800; font-weight:600; }
+
+  .empty { text-align:center; padding:24px 0; color:var(--muted); font-size:11px; line-height:2; }
+  .divider { border:none; border-top:1px solid var(--border); margin:12px 0; }
+  .green-text { color:var(--green); }
+  .red-text   { color:var(--red); }
+  .muted-text { color:var(--muted); }
+
+  /* CTRL BAR */
+  .ctrl-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:12px 16px; background:var(--surface); border:1px solid var(--border2); border-radius:10px; margin-bottom:14px; }
+  .ctrl-sep { width:1px; height:26px; background:var(--border2); }
+  .next-cycle { font-size:11px; color:var(--muted); }
+  .next-cycle b { color:var(--text); }
+
+  /* SCAN PROGRESS */
+  .scan-progress-bar { height:2px; background:var(--border2); border-radius:2px; margin-bottom:10px; overflow:hidden; }
+  .scan-progress-fill { height:100%; background:var(--accent); border-radius:2px; transition:width .4s; }
+
+  /* FLASH */
+  @keyframes flash { 0%{background:rgba(0,229,255,0.06)} 100%{background:transparent} }
+  .flash { animation:flash .8s ease-out; }
+
+  /* TABS */
+  .tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .tab { background:transparent; border:1px solid var(--border2); border-radius:20px; padding:4px 14px; font-family:var(--mono); font-size:10px; color:var(--muted); cursor:pointer; transition:all .15s; }
+  .tab.on { border-color:var(--accent); color:var(--accent); background:rgba(0,229,255,0.06); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <polyline points="2,17 6,10 10,13 14,6 18,9 22,4" stroke="#ff3d57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="22" cy="4" r="2.5" fill="#ff3d57"/>
+          <circle cx="14" cy="6" r="2" fill="rgba(255,61,87,0.4)"/>
+          <circle cx="6"  cy="10" r="2" fill="rgba(255,61,87,0.4)"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-title">TRADING ROBOT</div>
+        <div class="logo-sub">MULTI-TICKER · TINKOFF INVEST · v2.0</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span id="sandboxBadge" class="sandbox-badge" style="display:none">SANDBOX</span>
+      <div class="status-pill">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">не подключено</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- WARNING -->
+  <div class="warning-banner">
+    <div style="font-size:18px;flex-shrink:0">⚠️</div>
+    <div class="warning-text">
+      <b>Это реальный торговый робот.</b> Он мониторит несколько акций одновременно и совершает сделки автоматически.
+      Сначала протестируй в <b>Sandbox</b>. Устанавливай лимиты риска. Автор не несёт ответственности за убытки.
+    </div>
+  </div>
+
+  <div class="two-col">
+
+    <!-- LEFT COLUMN — SETTINGS -->
+    <div>
+
+      <!-- API -->
+      <div class="card">
+        <div class="card-title">ПОДКЛЮЧЕНИЕ К API</div>
+        <div class="field" style="margin-bottom:10px">
+          <div class="field-label">ТОКЕН TINKOFF INVEST</div>
+          <input id="tokenInput" class="input" type="password" placeholder="t.xxxxxxxxxxxxxxxx..." autocomplete="off">
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <div class="field-label">СЧЁТ</div>
+          <select id="accountSelect" class="input"><option value="">— сначала подключись —</option></select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn g" onclick="connect()">ПОДКЛЮЧИТЬ</button>
+          <button class="btn r" id="disconnectBtn" style="display:none" onclick="disconnect()">ОТКЛЮЧИТЬ</button>
+        </div>
+        <div class="toggle-row" onclick="toggleSandbox()">
+          <div class="toggle-sw" id="sandboxSw"></div>
+          <span class="toggle-label">Sandbox (тест без денег)</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.7">
+          Получи токен: <a href="https://www.tbank.ru/invest/settings/api/" target="_blank" style="color:var(--accent)">Инвестиции → Профиль → API</a>
+        </div>
+      </div>
+
+      <!-- WATCHLIST -->
+      <div class="card">
+        <div class="card-title">СПИСОК АКЦИЙ ДЛЯ МОНИТОРИНГА</div>
+        <div class="wl-input-row">
+          <input id="wlInput" class="input" placeholder="SBER, LKOH, YNDX..." oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')addTickers()">
+          <button class="btn" onclick="addTickers()">ДОБАВИТЬ</button>
+        </div>
+        <div id="wlChips" class="wl-chips"></div>
+        <div class="preset-btns">
+          <span style="font-size:10px;color:var(--muted);margin-right:4px">Пресеты:</span>
+          <button class="preset-btn" onclick="loadPreset('blue')">Голубые фишки</button>
+          <button class="preset-btn" onclick="loadPreset('tech')">Технологии</button>
+          <button class="preset-btn" onclick="loadPreset('energy')">Нефть и газ</button>
+          <button class="preset-btn" onclick="loadPreset('finance')">Финансы</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="card">
+        <div class="card-title">ПАРАМЕТРЫ ТОРГОВЛИ</div>
+
+        <div class="grid2">
+          <div class="field">
+            <div class="field-label">ТАЙМФРЕЙМ</div>
+            <select id="intervalSelect" class="input">
+              <option value="CANDLE_INTERVAL_5_MIN">5 минут</option>
+              <option value="CANDLE_INTERVAL_15_MIN" selected>15 минут</option>
+              <option value="CANDLE_INTERVAL_HOUR">1 час</option>
+              <option value="CANDLE_INTERVAL_DAY">День</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="field-label">ЦИКЛ СКАНЕРА (СЕК)</div>
+            <select id="cycleSelect" class="input">
+              <option value="30">30 секунд</option>
+              <option value="60" selected>1 минута</option>
+              <option value="120">2 минуты</option>
+              <option value="300">5 минут</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <div class="field-label">РАЗМЕР ПОЗИЦИИ (₽)</div>
+            <input id="posSize" class="input" type="number" value="5000" min="100" step="500">
+          </div>
+          <div class="field">
+            <div class="field-label">МАКС. ПОЗИЦИЙ ОДНОВР.</div>
+            <input id="maxPositions" class="input" type="number" value="3" min="1" max="20">
+          </div>
+        </div>
+
+        <div class="grid3">
+          <div class="field">
+            <div class="field-label">СТОП-ЛОСС (%)</div>
+            <input id="stopLoss" class="input" type="number" value="2" min="0.5" max="15" step="0.5">
+          </div>
+          <div class="field">
+            <div class="field-label">ТЕЙК-ПРОФИТ (%)</div>
+            <input id="takeProfit" class="input" type="number" value="4" min="0.5" max="30" step="0.5">
+          </div>
+          <div class="field">
+            <div class="field-label">ТРЕЙЛИНГ-СТОП (%)</div>
+            <input id="trailingStop" class="input" type="number" value="0" min="0" max="10" step="0.5" placeholder="0 = выкл">
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <div class="field-label">МИН. УВЕРЕННОСТЬ (%)</div>
+            <input id="minConf" class="input" type="number" value="50" min="10" max="90" step="5">
+          </div>
+          <div class="field">
+            <div class="field-label">МАКС. СДЕЛОК В ДЕНЬ</div>
+            <input id="maxTrades" class="input" type="number" value="10" min="1" max="100">
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <div class="field-label">РЕЖИМ СДЕЛОК</div>
+            <select id="tradeMode" class="input">
+              <option value="long_only">Только ЛОНГ</option>
+              <option value="short_only">Только ШОРТ</option>
+              <option value="both" selected>ЛОНГ + ШОРТ</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="field-label">ТИП ОРДЕРА</div>
+            <select id="orderType" class="input">
+              <option value="market" selected>Рыночный</option>
+              <option value="limit">Лимитный</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:8px">ФИЛЬТРЫ СИГНАЛОВ</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="toggle-row" onclick="toggleConf('usePatterns')">
+            <div class="toggle-sw on" id="sw_usePatterns"></div>
+            <span class="toggle-label">Свечные паттерны</span>
+          </div>
+          <div class="toggle-row" onclick="toggleConf('useVolume')">
+            <div class="toggle-sw on" id="sw_useVolume"></div>
+            <span class="toggle-label">Аномальный объём</span>
+          </div>
+          <div class="toggle-row" onclick="toggleConf('useRSI')">
+            <div class="toggle-sw on" id="sw_useRSI"></div>
+            <span class="toggle-label">RSI фильтр</span>
+          </div>
+          <div class="toggle-row" onclick="toggleConf('useMACD')">
+            <div class="toggle-sw on" id="sw_useMACD"></div>
+            <span class="toggle-label">MACD фильтр</span>
+          </div>
+          <div class="toggle-row" onclick="toggleConf('skipWeekend')">
+            <div class="toggle-sw on" id="sw_skipWeekend"></div>
+            <span class="toggle-label">Не торговать в выходные</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end left col -->
+
+    <!-- RIGHT COLUMN — DASHBOARD -->
+    <div>
+
+      <!-- CTRL BAR -->
+      <div class="ctrl-bar">
+        <button class="btn big g" id="startBtn" onclick="startRobot()" disabled>▶ ЗАПУСТИТЬ</button>
+        <button class="btn big r" id="stopBtn"  onclick="stopRobot()"  style="display:none">■ СТОП</button>
+        <div class="ctrl-sep"></div>
+        <button class="btn" id="scanNowBtn" onclick="runFullScan()" disabled>🔍 СКАНИРОВАТЬ</button>
+        <button class="btn a" id="closeAllBtn" onclick="closeAllPositions()" style="display:none">⚡ ЗАКРЫТЬ ВСЁ</button>
+        <div class="ctrl-sep"></div>
+        <div class="next-cycle" id="nextCycleInfo">Робот не запущен</div>
+      </div>
+
+      <!-- METRICS -->
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">МОНИТОРЮ</div>
+          <div class="metric-val c" id="mWatching">0</div>
+          <div class="metric-sub">акций</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">ПОЗИЦИЙ</div>
+          <div class="metric-val c" id="mPositions">0</div>
+          <div class="metric-sub" id="mPositionsSub">из <span id="mMaxPos">3</span> макс</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">СДЕЛОК СЕГОДНЯ</div>
+          <div class="metric-val c" id="mTrades">0</div>
+          <div class="metric-sub">из <span id="mMaxTrades">10</span> лимит</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">P&L СЕССИИ</div>
+          <div class="metric-val g" id="mPnl">+0 ₽</div>
+          <div class="metric-sub">реализованный</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">ЛУЧШИЙ СИГНАЛ</div>
+          <div class="metric-val a" id="mBestSignal">—</div>
+          <div class="metric-sub" id="mBestTicker">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">ЦИКЛОВ</div>
+          <div class="metric-val" id="mCycles">0</div>
+          <div class="metric-sub">выполнено</div>
+        </div>
+      </div>
+
+      <!-- SCANNER -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title" style="margin-bottom:0">СКАНЕР РЫНКА</div>
+          <div style="font-size:10px;color:var(--muted)" id="lastScanTime">—</div>
+        </div>
+        <div class="scan-progress-bar"><div class="scan-progress-fill" id="scanProgressFill" style="width:0%"></div></div>
+        <div id="scannerGrid" class="scanner-grid">
+          <div class="empty">Добавь акции в список и запусти робота</div>
+        </div>
+      </div>
+
+      <!-- OPEN POSITIONS -->
+      <div class="card" id="posCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin-bottom:0">ОТКРЫТЫЕ ПОЗИЦИИ</div>
+          <button class="btn r" style="padding:4px 12px;font-size:9px;display:none" id="closeAllBtn2" onclick="closeAllPositions()">ЗАКРЫТЬ ВСЕ</button>
+        </div>
+        <div id="positionsBody"><div class="empty">Нет открытых позиций</div></div>
+      </div>
+
+      <!-- TRADES HISTORY -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin-bottom:0">ИСТОРИЯ СДЕЛОК</div>
+          <button class="btn" style="padding:4px 12px;font-size:9px" onclick="clearTrades()">ОЧИСТИТЬ</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>ВРЕМЯ</th><th>ТИКЕР</th><th>ДЕЙСТВИЕ</th>
+              <th>КОЛ-ВО</th><th>ЦЕНА</th><th>СУММА</th><th>P&L</th><th>ПРИЧИНА</th>
+            </tr></thead>
+            <tbody id="tradesBody"><tr><td colspan="8"><div class="empty">Сделок нет</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LOG -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title" style="margin-bottom:0">ЛОГ РОБОТА</div>
+          <button class="btn" style="padding:3px 10px;font-size:9px" onclick="document.getElementById('logBody').innerHTML=''">ОЧИСТИТЬ</button>
+        </div>
+        <div class="log-body" id="logBody"></div>
+      </div>
+
+    </div><!-- end right col -->
+  </div><!-- end two-col -->
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const BASE    = 'https://invest-public-api.tinkoff.ru/rest';
+const SANDBOX = 'https://sandbox-invest-public-api.tinkoff.ru/rest';
+
+let token       = null;
+let useSandbox  = false;
+let accountId   = null;
+let isRunning   = false;
+let robotTimer  = null;
+let nextCycleTimer = null;
+let nextCycleAt = null;
+let cycleCount  = 0;
+let tradesCount = 0;
+let sessionPnl  = 0;
+
+// Watchlist: { ticker, figi, status:'idle'|'scanning'|'ok'|'err', signal, score, confidence, price, factors, lastScan }
+let watchlist = [];
+// Open positions: { ticker, figi, qty, entryPrice, peakPrice, entryTime, direction, stopPrice, targetPrice }
+let openPositions = [];
+let tradesHistory = [];
+
+const cfg = { usePatterns:true, useVolume:true, useRSI:true, useMACD:true, skipWeekend:true };
+
+// Presets
+const PRESETS = {
+  blue:    ['SBER','LKOH','GAZP','GMKN','NVTK','ROSN','TATN','YNDX'],
+  tech:    ['YNDX','VKCO','OZON','POSI','HEAD','ASTR','DIAS'],
+  energy:  ['LKOH','GAZP','NVTK','ROSN','TATN','SIBN','SNGS'],
+  finance: ['SBER','VTBR','TCSG','MOEX','CBOM','BSPB','SFIN'],
+};
+
+// ═══════════════════════════════════════════════════════════════
+// UTILITY
+// ═══════════════════════════════════════════════════════════════
+function log(msg, type='info') {
+  const lb = document.getElementById('logBody');
+  const t  = new Date().toTimeString().slice(0,8);
+  const el = document.createElement('div');
+  el.className = 'log-line';
+  el.innerHTML = `<span class="log-time">${t}</span><span class="log-msg ${type}">${msg}</span>`;
+  lb.prepend(el);
+  while(lb.children.length > 120) lb.removeChild(lb.lastChild);
+}
+
+function unitsNano(v) {
+  if(!v) return 0;
+  return parseFloat((parseInt(v.units||0) + (parseInt(v.nano||0)/1e9)).toFixed(4));
+}
+
+function fmt(n)    { return n.toLocaleString('ru', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtPnl(n) { return (n>=0?'+':'')+fmt(n)+' ₽'; }
+function now8()    { return new Date().toTimeString().slice(0,8); }
+
+function isWeekend() {
+  const d = new Date().getDay();
+  return d === 0 || d === 6;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════
+async function apiPost(endpoint, body, sb=null) {
+  const base = (sb !== null ? sb : useSandbox) ? SANDBOX : BASE;
+  const r = await fetch(base + endpoint, {
+    method:'POST', mode:'cors', credentials:'omit',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) { const t=await r.text().catch(()=>''); throw new Error(`HTTP ${r.status}: ${t.slice(0,100)}`); }
+  return r.json();
+}
+
+async function apiTry(endpoint, body) {
+  for(const sb of [useSandbox, !useSandbox]) {
+    try { const d = await apiPost(endpoint, body, sb); return d; } catch(e) {}
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONNECT
+// ═══════════════════════════════════════════════════════════════
+async function connect() {
+  const t = document.getElementById('tokenInput').value.trim();
+  if(!t) { log('Введи токен', 'err'); return; }
+  token = t;
+  log('Подключаюсь...', 'info');
+  let accs = null;
+  for(const sb of [useSandbox, !useSandbox]) {
+    try {
+      const d = await apiPost('/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts', {}, sb);
+      if(d.accounts) { accs = d.accounts; if(sb !== useSandbox){ useSandbox=sb; document.getElementById('sandboxSw').classList.toggle('on',sb); } break; }
+    } catch(e) {}
+  }
+  if(!accs) { log('Ошибка подключения. Проверь токен.','err'); token=null; return; }
+  log(`Подключено! Счетов: ${accs.length}${useSandbox?' (Sandbox)':''}`, 'ok');
+  if(useSandbox) document.getElementById('sandboxBadge').style.display='';
+  populateAccounts(accs);
+  setConnected(true);
+}
+
+function populateAccounts(accs) {
+  const sel = document.getElementById('accountSelect');
+  sel.innerHTML = accs.map(a=>`<option value="${a.id}">${a.name||a.type||'Счёт'} (…${a.id.slice(-5)})</option>`).join('');
+  if(accs.length) accountId = accs[0].id;
+  sel.onchange = ()=>{ accountId=sel.value; log('Счёт: '+accountId,'info'); };
+}
+
+function setConnected(ok) {
+  document.getElementById('statusDot').className = 'status-dot'+(ok?' live':'');
+  document.getElementById('statusText').textContent = ok?'подключено':'не подключено';
+  document.getElementById('disconnectBtn').style.display = ok?'':'none';
+  document.getElementById('startBtn').disabled   = !ok;
+  document.getElementById('scanNowBtn').disabled = !ok;
+}
+
+function disconnect() {
+  stopRobot();
+  token=null; accountId=null;
+  setConnected(false);
+  document.getElementById('sandboxBadge').style.display='none';
+  document.getElementById('accountSelect').innerHTML='<option>— сначала подключись —</option>';
+  log('Отключено','warn');
+}
+
+function toggleSandbox() {
+  useSandbox = !useSandbox;
+  document.getElementById('sandboxSw').classList.toggle('on', useSandbox);
+  document.getElementById('sandboxBadge').style.display = useSandbox?'':'none';
+  log('Sandbox: '+(useSandbox?'ВКЛ':'ВЫКЛ'),'warn');
+}
+
+function toggleConf(key) {
+  cfg[key] = !cfg[key];
+  document.getElementById('sw_'+key).classList.toggle('on', cfg[key]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WATCHLIST
+// ═══════════════════════════════════════════════════════════════
+function addTickers() {
+  const raw = document.getElementById('wlInput').value.trim().toUpperCase();
+  if(!raw) return;
+  const tickers = raw.split(/[\s,;]+/).filter(Boolean);
+  tickers.forEach(tk => {
+    if(!watchlist.find(w=>w.ticker===tk)) {
+      watchlist.push({ ticker:tk, figi:null, status:'idle', signal:'—', score:0, confidence:0, price:null, factors:[], lastScan:null });
+      log('Добавлен: '+tk,'info');
+    }
+  });
+  document.getElementById('wlInput').value = '';
+  renderChips();
+  updateMetrics();
+}
+
+function removeTicker(ticker) {
+  watchlist = watchlist.filter(w=>w.ticker!==ticker);
+  openPositions = openPositions.filter(p=>p.ticker!==ticker);
+  renderChips();
+  renderScanner();
+  renderPositions();
+  updateMetrics();
+}
+
+function loadPreset(name) {
+  const list = PRESETS[name] || [];
+  list.forEach(tk => {
+    if(!watchlist.find(w=>w.ticker===tk))
+      watchlist.push({ ticker:tk, figi:null, status:'idle', signal:'—', score:0, confidence:0, price:null, factors:[], lastScan:null });
+  });
+  log(`Пресет "${name}": добавлено ${list.length} акций`, 'info');
+  renderChips();
+  updateMetrics();
+}
+
+function renderChips() {
+  const c = document.getElementById('wlChips');
+  if(!watchlist.length) { c.innerHTML='<span style="font-size:11px;color:var(--muted)">Список пуст — добавь тикеры</span>'; return; }
+  c.innerHTML = watchlist.map(w => {
+    const cls = w.status==='scanning'?'scanning': w.signal.includes('ЛОНГ')?'has-long': w.signal.includes('ШОРТ')?'has-short':'has-wait';
+    return `<div class="chip ${cls}">
+      <span class="chip-dot"></span>${w.ticker}
+      <button class="chip-del" onclick="removeTicker('${w.ticker}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MARKET DATA
+// ═══════════════════════════════════════════════════════════════
+async function findFigi(ticker) {
+  const d = await apiTry('/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument',
+    { query:ticker, instrumentKind:'INSTRUMENT_TYPE_SHARE', apiTradeAvailableFlag:true });
+  if(d && d.instruments && d.instruments.length) return d.instruments[0].figi;
+  return null;
+}
+
+async function getCandles(figi, interval) {
+  const now  = new Date();
+  const from = new Date(now);
+  const days = {CANDLE_INTERVAL_5_MIN:2, CANDLE_INTERVAL_15_MIN:5, CANDLE_INTERVAL_HOUR:14, CANDLE_INTERVAL_DAY:60};
+  from.setDate(from.getDate() - (days[interval]||5));
+  const d = await apiTry('/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles',
+    { figi, from:from.toISOString(), to:now.toISOString(), interval });
+  return d && d.candles ? d.candles : [];
+}
+
+async function getLastPrice(figi) {
+  const d = await apiTry('/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices', { figi:[figi] });
+  if(d && d.lastPrices && d.lastPrices[0]) return unitsNano(d.lastPrices[0].price);
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INDICATORS
+// ═══════════════════════════════════════════════════════════════
+function calcMA(arr, p) {
+  return arr.map((_,i)=> i<p-1 ? null : arr.slice(i-p+1,i+1).reduce((a,b)=>a+b,0)/p);
+}
+function calcRSI(c, p=14) {
+  const r=new Array(c.length).fill(null); if(c.length<p+1) return r;
+  let ag=0,al=0;
+  for(let i=1;i<=p;i++){const d=c[i]-c[i-1]; if(d>0)ag+=d;else al-=d;}
+  ag/=p; al/=p; r[p]=al===0?100:100-100/(1+ag/al);
+  for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1],g=d>0?d:0,l=d<0?-d:0; ag=(ag*(p-1)+g)/p; al=(al*(p-1)+l)/p; r[i]=al===0?100:100-100/(1+ag/al);}
+  return r;
+}
+function calcMACD(c,fast=12,slow=26,sig=9){
+  function ema(arr,p){const k=2/(p+1),r=new Array(arr.length).fill(null); let s=arr.findIndex(v=>v!==null); if(s<0)return r; r[s]=arr[s]; for(let i=s+1;i<arr.length;i++){if(arr[i]==null)continue;r[i]=arr[i]*k+(r[i-1]||arr[i])*(1-k);} return r;}
+  const ef=ema(c,fast),es=ema(c,slow);
+  const ml=c.map((_,i)=>ef[i]&&es[i]?ef[i]-es[i]:null);
+  const sl=ema(ml,sig);
+  return {macdLine:ml,signalLine:sl};
+}
+
+const PAT_DEFS = {
+  hammer:        {dir:'bull',reliability:85,name:'Молот'},
+  shooting_star: {dir:'bear',reliability:80,name:'Падающая звезда'},
+  bull_engulf:   {dir:'bull',reliability:90,name:'Бычье поглощение'},
+  bear_engulf:   {dir:'bear',reliability:90,name:'Медвежье поглощение'},
+  morning_star:  {dir:'bull',reliability:92,name:'Утренняя звезда'},
+  evening_star:  {dir:'bear',reliability:92,name:'Вечерняя звезда'},
+  three_white:   {dir:'bull',reliability:88,name:'Три солдата'},
+  three_black:   {dir:'bear',reliability:88,name:'Три вороны'},
+  doji_dragonfly:{dir:'bull',reliability:75,name:'Доджи-стрекоза'},
+  doji_gravestone:{dir:'bear',reliability:75,name:'Доджи-надгробие'},
+  marubozu_bull: {dir:'bull',reliability:80,name:'Марубозу ▲'},
+  marubozu_bear: {dir:'bear',reliability:80,name:'Марубозу ▼'},
+  tweezer_top:   {dir:'bear',reliability:72,name:'Пинцет↑'},
+  tweezer_bot:   {dir:'bull',reliability:72,name:'Пинцет↓'},
+};
+
+function detectPatterns(opens,closes,highs,lows,vols,avg){
+  const found=[]; const n=opens.length;
+  for(let i=1;i<n;i++){
+    const o=opens[i],c=closes[i],h=highs[i],l=lows[i];
+    const body=Math.abs(c-o),upper=h-Math.max(o,c),lower=Math.min(o,c)-l,total=h-l||.0001;
+    const isBull=c>=o,vm=vols[i]/avg;
+    const isDoji=body<=total*.05;
+    const po=opens[i-1],pc=closes[i-1],prevBull=pc>=po,prevBody=Math.abs(pc-po);
+    if(!isDoji){
+      if(isBull&&lower>=body*2&&upper<=body*.5)found.push({type:'hammer',i,vm,confirmed:false});
+      if(!isBull&&upper>=body*2&&lower<=body*.5)found.push({type:'shooting_star',i,vm,confirmed:true});
+    }
+    if(isDoji&&lower>=upper*2)found.push({type:'doji_dragonfly',i,vm,confirmed:false});
+    if(isDoji&&upper>=lower*2)found.push({type:'doji_gravestone',i,vm,confirmed:false});
+    if(isBull&&body>total*.85&&upper<body*.1&&lower<body*.1)found.push({type:'marubozu_bull',i,vm,confirmed:false});
+    if(!isBull&&body>total*.85&&upper<body*.1&&lower<body*.1)found.push({type:'marubozu_bear',i,vm,confirmed:false});
+    if(isBull&&!prevBull&&c>po&&o<pc&&body>prevBody*.9)found.push({type:'bull_engulf',i,vm,confirmed:true});
+    if(!isBull&&prevBull&&c<po&&o>pc&&body>prevBody*.9)found.push({type:'bear_engulf',i,vm,confirmed:true});
+    if(Math.abs(h-highs[i-1])/(h||1)<.002&&!isBull&&prevBull)found.push({type:'tweezer_top',i,vm,confirmed:false});
+    if(Math.abs(l-lows[i-1])/(l||1)<.002&&isBull&&!prevBull)found.push({type:'tweezer_bot',i,vm,confirmed:false});
+    if(i<2)continue;
+    const ppo=opens[i-2],ppc=closes[i-2],midBody=Math.abs(pc-po);
+    if(ppc<ppo&&midBody<Math.abs(ppc-ppo)*.5&&isBull&&c>(ppo+ppc)/2)found.push({type:'morning_star',i,vm,confirmed:true});
+    if(ppc>ppo&&midBody<Math.abs(ppc-ppo)*.5&&!isBull&&c<(ppo+ppc)/2)found.push({type:'evening_star',i,vm,confirmed:true});
+    if(closes[i]>opens[i]&&closes[i-1]>opens[i-1]&&closes[i-2]>opens[i-2]&&closes[i]>closes[i-1]&&closes[i-1]>closes[i-2])found.push({type:'three_white',i,vm,confirmed:true});
+    if(closes[i]<opens[i]&&closes[i-1]<opens[i-1]&&closes[i-2]<opens[i-2]&&closes[i]<closes[i-1]&&closes[i-1]<closes[i-2])found.push({type:'three_black',i,vm,confirmed:true});
+  }
+  const recent=found.filter(p=>p.i>=n-20);
+  const seen=new Map(); recent.sort((a,b)=>b.i-a.i).forEach(p=>{if(!seen.has(p.type))seen.set(p.type,p);});
+  return [...seen.values()];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIGNAL ENGINE
+// ═══════════════════════════════════════════════════════════════
+function signalEngine(opens,closes,highs,lows,vols){
+  const n=closes.length; if(n<20) return null;
+  const avg=vols.reduce((a,b)=>a+b,0)/vols.length;
+  const patterns=detectPatterns(opens,closes,highs,lows,vols,avg);
+  const ma20=calcMA(closes,20), ma50=calcMA(closes,Math.min(50,n));
+  const rsi=calcRSI(closes);
+  const {macdLine,signalLine}=calcMACD(closes);
+  const lc=closes[n-1],lrsi=rsi[n-1],lma20=ma20[n-1],lma50=ma50[n-1],lmacd=macdLine[n-1],lsig=signalLine[n-1];
+
+  let score=0; const factors=[];
+
+  if(lma20){ const b=lc>lma20; score+=b?1:-1; factors.push({name:'Цена vs MA20',val:b?'Выше ▲':'Ниже ▼',dir:b?'bull':'bear'}); }
+  if(lma20&&lma50){ const b=lma20>lma50; score+=b?.5:-.5; factors.push({name:'MA20/MA50',val:b?'Золотой крест':'Мёртвый крест',dir:b?'bull':'bear'}); }
+
+  if(lrsi&&cfg.useRSI){
+    const inD=lma20&&lc<lma20, inU=lma20&&lc>lma20;
+    let dir='neut',val=lrsi.toFixed(0);
+    if(lrsi<30){ dir='bull'; val='Перепродан ▲'; score+=inD?.5:1.5; }
+    else if(lrsi<45){ dir='bull'; val=lrsi.toFixed(0)+' ▲'; score+=.5; }
+    else if(lrsi>70){ dir='bear'; val='Перекуплен ▼'; score-=inU?.5:1.5; }
+    else if(lrsi>55){ dir='bear'; val=lrsi.toFixed(0)+' ▼'; score-=.5; }
+    factors.push({name:'RSI(14)',val,dir});
+  }
+
+  if(lmacd&&lsig&&cfg.useMACD){
+    const b=lmacd>lsig, cross=Math.sign(lmacd-lsig)!==Math.sign((macdLine[n-2]||0)-(signalLine[n-2]||0));
+    score+=b?.5:-.5; if(cross)score+=b?1:-1;
+    factors.push({name:'MACD',val:b?(cross?'Пересечение ↑':'Выше сигнала'):(cross?'Пересечение ↓':'Ниже сигнала'),dir:b?'bull':'bear'});
+  }
+
+  if(cfg.useVolume){
+    const pv=vols.slice(-20),po=opens.slice(-20),pc=closes.slice(-20);
+    const press=pv.reduce((acc,v,i)=>acc+(pc[i]>=po[i]?v:-v),0)/(pv.reduce((a,b)=>a+b,0)||1);
+    factors.push({name:'Давление объёма',val:press>.1?'Покупки ▲':press<-.1?'Продажи ▼':'Нейтральное',dir:press>.1?'bull':press<-.1?'bear':'neut'});
+    score+=press*2;
+
+    const anoms=vols.map((v,i)=>({v,dir:closes[i]>=opens[i]?'buy':'sell',mult:v/avg})).filter(a=>a.mult>=2.5);
+    if(anoms.length){
+      const b=anoms.filter(a=>a.dir==='buy').length, s=anoms.filter(a=>a.dir==='sell').length;
+      if(b>s){score+=1;factors.push({name:'Аном. объём',val:'×'+anoms[0].mult.toFixed(1)+' покупки',dir:'bull'});}
+      else if(s>b){score-=1;factors.push({name:'Аном. объём',val:'×'+anoms[0].mult.toFixed(1)+' продажи',dir:'bear'});}
+    }
+  }
+
+  if(cfg.usePatterns){
+    const bp=patterns.filter(p=>PAT_DEFS[p.type]&&PAT_DEFS[p.type].dir==='bull'&&p.confirmed);
+    const brp=patterns.filter(p=>PAT_DEFS[p.type]&&PAT_DEFS[p.type].dir==='bear'&&p.confirmed);
+    if(bp.length){score+=Math.min(bp.length,2);factors.push({name:'Бычьи паттерны',val:bp.map(p=>PAT_DEFS[p.type].name).slice(0,2).join(', '),dir:'bull'});}
+    if(brp.length){score-=Math.min(brp.length,2);factors.push({name:'Медвежьи паттерны',val:brp.map(p=>PAT_DEFS[p.type].name).slice(0,2).join(', '),dir:'bear'});}
+  }
+
+  const tp=(lc-closes[n-Math.min(10,n)])/closes[n-Math.min(10,n)]*100;
+  factors.push({name:'Тренд 10 свечей',val:(tp>=0?'+':'')+tp.toFixed(2)+'%',dir:tp>1?'bull':tp<-1?'bear':'neut'});
+  score+=tp>1?.5:tp<-1?-.5:0;
+
+  const confidence=Math.min(100,Math.abs(score)/8*100);
+  let signal,action;
+  if(score>=2.5)     {signal='ЛОНГ';        action='Сильный бычий сигнал. Открываю лонг.';}
+  else if(score>=1)  {signal='СЛАБЫЙ ЛОНГ'; action='Умеренно бычий. Осторожная покупка.';}
+  else if(score<=-2.5){signal='ШОРТ';       action='Сильный медвежий сигнал. Открываю шорт.';}
+  else if(score<=-1) {signal='СЛАБЫЙ ШОРТ'; action='Умеренно медвежий. Осторожная продажа.';}
+  else               {signal='ЖДАТЬ';        action='Нет чёткого сигнала. Жду.';}
+
+  return {signal,score,confidence,factors,action,lastClose:lc};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCAN ONE TICKER
+// ═══════════════════════════════════════════════════════════════
+async function scanTicker(w) {
+  w.status = 'scanning';
+  renderChips(); renderScanner();
+
+  // Get FIGI if not cached
+  if(!w.figi) {
+    w.figi = await findFigi(w.ticker);
+    if(!w.figi) { w.status='err'; w.signal='ОШИБКА'; log('FIGI не найден: '+w.ticker,'err'); return; }
+  }
+
+  // Get candles
+  const interval = document.getElementById('intervalSelect').value;
+  const candles  = await getCandles(w.figi, interval);
+  if(candles.length < 20) { w.status='err'; w.signal='МАЛ. ДАННЫХ'; log('Мало свечей: '+w.ticker,'warn'); return; }
+
+  const opens  = candles.map(c=>unitsNano(c.open));
+  const closes = candles.map(c=>unitsNano(c.close));
+  const highs  = candles.map(c=>unitsNano(c.high));
+  const lows   = candles.map(c=>unitsNano(c.low));
+  const vols   = candles.map(c=>parseInt(c.volume)||0);
+
+  const result = signalEngine(opens,closes,highs,lows,vols);
+  if(!result) { w.status='err'; return; }
+
+  w.status     = 'ok';
+  w.signal     = result.signal;
+  w.score      = result.score;
+  w.confidence = result.confidence;
+  w.factors    = result.factors;
+  w.price      = result.lastClose;
+  w.lastScan   = now8();
+  w.action     = result.action;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FULL SCAN CYCLE
+// ═══════════════════════════════════════════════════════════════
+async function runFullScan() {
+  if(!token) { log('Не подключён','err'); return; }
+  if(!watchlist.length) { log('Список акций пуст','warn'); return; }
+
+  if(cfg.skipWeekend && isWeekend()) {
+    log('Выходной день — торговля пропущена. Отключи фильтр для тестирования.','warn');
+    return;
+  }
+
+  cycleCount++;
+  log(`── Цикл #${cycleCount} · ${watchlist.length} акций ──`, 'info');
+
+  const total = watchlist.length;
+  for(let i=0; i<total; i++) {
+    const w = watchlist[i];
+    // progress bar
+    document.getElementById('scanProgressFill').style.width = ((i/total)*100)+'%';
+    await scanTicker(w);
+    renderChips();
+    renderScanner();
+    await sleep(400); // rate limit
+  }
+  document.getElementById('scanProgressFill').style.width = '100%';
+  setTimeout(()=>document.getElementById('scanProgressFill').style.width='0%', 1000);
+
+  document.getElementById('lastScanTime').textContent = 'обновлено в ' + now8();
+  log(`Скан завершён. Сигналы: ЛОНГ=${watchlist.filter(w=>w.signal.includes('ЛОНГ')).length} ШОРТ=${watchlist.filter(w=>w.signal.includes('ШОРТ')).length}`, 'ok');
+
+  // Check existing positions SL/TP first
+  await checkAllPositions();
+
+  // Execute trades if robot running
+  if(isRunning) await executeSignals();
+
+  updateMetrics();
+  renderPositions();
+}
+
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+// ═══════════════════════════════════════════════════════════════
+// EXECUTE SIGNALS — after scan, decide which tickers to trade
+// ═══════════════════════════════════════════════════════════════
+async function executeSignals() {
+  const minConf   = parseFloat(document.getElementById('minConf').value)||50;
+  const maxPos    = parseInt(document.getElementById('maxPositions').value)||3;
+  const maxTrades = parseInt(document.getElementById('maxTrades').value)||10;
+  const mode      = document.getElementById('tradeMode').value;
+
+  if(tradesCount >= maxTrades) { log('Лимит сделок дня достигнут','warn'); return; }
+
+  // Sort by |score| descending — best signals first
+  const candidates = [...watchlist]
+    .filter(w=>w.status==='ok' && w.confidence>=minConf && w.signal!=='ЖДАТЬ')
+    .sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
+
+  for(const w of candidates) {
+    if(tradesCount >= maxTrades) break;
+    const wantLong  = w.signal.includes('ЛОНГ');
+    const wantShort = w.signal.includes('ШОРТ');
+    if(wantLong  && mode==='short_only') continue;
+    if(wantShort && mode==='long_only')  continue;
+
+    const existPos = openPositions.find(p=>p.ticker===w.ticker);
+
+    // Close opposite
+    if(existPos) {
+      if(wantLong  && existPos.direction==='short') await closePosition(existPos, w.price, 'Смена → бычий');
+      else if(wantShort && existPos.direction==='long')  await closePosition(existPos, w.price, 'Смена → медвежий');
+      else continue; // same direction — hold
+    }
+
+    // Check max positions
+    if(openPositions.length >= maxPos) {
+      log(`Лимит позиций (${maxPos}) — пропускаю ${w.ticker}`,'warn');
+      continue;
+    }
+
+    // Open
+    await openPosition(w, wantLong);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OPEN POSITION
+// ═══════════════════════════════════════════════════════════════
+async function openPosition(w, isLong) {
+  const posSize = parseFloat(document.getElementById('posSize').value)||5000;
+  const sl  = parseFloat(document.getElementById('stopLoss').value)||2;
+  const tp  = parseFloat(document.getElementById('takeProfit').value)||4;
+  const price = w.price;
+  if(!price) return;
+
+  const qty = Math.max(1, Math.floor(posSize / price));
+  const dir = isLong ? 'ORDER_DIRECTION_BUY' : 'ORDER_DIRECTION_SELL';
+  const label = isLong ? 'ПОКУПКА ▲' : 'ПРОДАЖА ▼';
+
+  log(`🔔 ${w.ticker}: ${w.signal} (${w.confidence.toFixed(0)}%) — ${label} ${qty}×${fmt(price)}₽`, 'trade');
+
+  if(!useSandbox) {
+    const orderType = document.getElementById('orderType').value;
+    const body = {
+      figi: w.figi, quantity: qty, direction: dir, accountId,
+      orderType: orderType==='market'?'ORDER_TYPE_MARKET':'ORDER_TYPE_LIMIT',
+      orderId: 'robot_'+Date.now()
+    };
+    if(orderType==='limit') {
+      const u=Math.floor(price), n2=Math.round((price-u)*1e9);
+      body.price={units:String(u),nano:n2};
+    }
+    const res = await apiTry('/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', body);
+    if(!res) { log('Ордер не исполнен: '+w.ticker, 'err'); return; }
+    log('Ордер принят: '+(res.orderId||'—'),'ok');
+  } else {
+    log('SANDBOX: ордер эмулирован','ok');
+  }
+
+  const stopPrice   = isLong ? price*(1-sl/100) : price*(1+sl/100);
+  const targetPrice = isLong ? price*(1+tp/100) : price*(1-tp/100);
+
+  openPositions.push({
+    ticker:w.ticker, figi:w.figi, qty, entryPrice:price, peakPrice:price,
+    entryTime:now8(), direction:isLong?'long':'short', stopPrice, targetPrice
+  });
+  tradesCount++;
+
+  addTradeRecord({ time:now8(), ticker:w.ticker, action:label, qty, price, sum:price*qty, pnl:null, reason:w.signal });
+  log(`Открыта: ${w.ticker} ${qty}лот × ${fmt(price)}₽ | СЛ ${fmt(stopPrice)} | ТП ${fmt(targetPrice)}`,'ok');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHECK POSITIONS (SL/TP/Trailing)
+// ═══════════════════════════════════════════════════════════════
+async function checkAllPositions() {
+  if(!openPositions.length) return;
+  const trailing = parseFloat(document.getElementById('trailingStop').value)||0;
+
+  for(const pos of [...openPositions]) {
+    const w = watchlist.find(w=>w.ticker===pos.ticker);
+    const price = w ? w.price : await getLastPrice(pos.figi);
+    if(!price) continue;
+
+    // Update trailing stop
+    if(trailing > 0) {
+      if(pos.direction==='long' && price > pos.peakPrice) {
+        pos.peakPrice = price;
+        pos.stopPrice = price * (1 - trailing/100);
+      } else if(pos.direction==='short' && price < pos.peakPrice) {
+        pos.peakPrice = price;
+        pos.stopPrice = price * (1 + trailing/100);
+      }
+    }
+
+    const pnlPct = pos.direction==='long'
+      ? (price-pos.entryPrice)/pos.entryPrice*100
+      : (pos.entryPrice-price)/pos.entryPrice*100;
+
+    const hitSL = pos.direction==='long' ? price<=pos.stopPrice : price>=pos.stopPrice;
+    const hitTP = pos.direction==='long' ? price>=pos.targetPrice : price<=pos.targetPrice;
+
+    if(hitSL) await closePosition(pos, price, `Стоп-лосс (${pnlPct.toFixed(2)}%)`);
+    else if(hitTP) await closePosition(pos, price, `Тейк-профит (+${pnlPct.toFixed(2)}%)`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLOSE POSITION
+// ═══════════════════════════════════════════════════════════════
+async function closePosition(pos, exitPrice, reason) {
+  log(`Закрываю ${pos.ticker} — ${reason}`, 'warn');
+  const dir = pos.direction==='long' ? 'ORDER_DIRECTION_SELL' : 'ORDER_DIRECTION_BUY';
+  const label = pos.direction==='long' ? 'ПРОДАЖА ▼ (закр.)' : 'ПОКУПКА ▲ (закр.)';
+
+  if(!useSandbox) {
+    await apiTry('/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', {
+      figi:pos.figi, quantity:pos.qty, direction:dir, accountId,
+      orderType:'ORDER_TYPE_MARKET', orderId:'robot_close_'+Date.now()
+    });
+  }
+
+  const pnl = pos.direction==='long'
+    ? (exitPrice-pos.entryPrice)*pos.qty
+    : (pos.entryPrice-exitPrice)*pos.qty;
+
+  sessionPnl += pnl;
+  tradesCount++;
+  openPositions = openPositions.filter(p=>p!==pos);
+  addTradeRecord({time:now8(),ticker:pos.ticker,action:label,qty:pos.qty,price:exitPrice,sum:exitPrice*pos.qty,pnl,reason});
+  log(`Закрыта: ${pos.ticker} PnL=${fmtPnl(pnl)}`, pnl>=0?'ok':'err');
+}
+
+async function closeAllPositions() {
+  if(!openPositions.length) { log('Нет позиций','warn'); return; }
+  log('Закрываю все позиции...','warn');
+  for(const pos of [...openPositions]) {
+    const price = pos.ticker && watchlist.find(w=>w.ticker===pos.ticker)?.price || await getLastPrice(pos.figi);
+    if(price) await closePosition(pos, price, 'Ручное закрытие');
+  }
+  renderPositions(); updateMetrics();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROBOT START / STOP
+// ═══════════════════════════════════════════════════════════════
+function startRobot() {
+  if(!token)          { log('Сначала подключись','err'); return; }
+  if(!watchlist.length){ log('Добавь акции в список','err'); return; }
+
+  tradesCount = 0;
+  isRunning   = true;
+
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display  = '';
+  document.getElementById('closeAllBtn').style.display = '';
+  document.getElementById('closeAllBtn2').style.display = '';
+  document.getElementById('statusDot').className    = 'status-dot running';
+  document.getElementById('statusText').textContent = 'работает';
+  document.getElementById('mMaxPos').textContent    = document.getElementById('maxPositions').value;
+  document.getElementById('mMaxTrades').textContent = document.getElementById('maxTrades').value;
+
+  log(`🤖 Робот запущен! ${watchlist.length} акций | Цикл: ${document.getElementById('cycleSelect').value}сек`, 'ok');
+  runFullScan();
+  scheduleCycle();
+}
+
+function scheduleCycle() {
+  clearTimeout(robotTimer);
+  clearInterval(nextCycleTimer);
+  const cycle = parseInt(document.getElementById('cycleSelect').value)||60;
+  nextCycleAt = Date.now() + cycle*1000;
+
+  robotTimer = setTimeout(()=>{ if(isRunning){ runFullScan(); scheduleCycle(); } }, cycle*1000);
+
+  nextCycleTimer = setInterval(()=>{
+    if(!nextCycleAt||!isRunning) return;
+    const sec = Math.max(0,Math.round((nextCycleAt-Date.now())/1000));
+    document.getElementById('nextCycleInfo').innerHTML = `Следующий скан через <b>${sec}</b> сек`;
+    if(sec<=0) clearInterval(nextCycleTimer);
+  }, 1000);
+}
+
+function stopRobot() {
+  isRunning = false;
+  clearTimeout(robotTimer);
+  clearInterval(nextCycleTimer);
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('stopBtn').style.display  = 'none';
+  document.getElementById('statusDot').className    = token?'status-dot live':'status-dot';
+  document.getElementById('statusText').textContent = token?'подключено':'не подключено';
+  document.getElementById('nextCycleInfo').innerHTML = 'Робот остановлен';
+  log('🛑 Робот остановлен','warn');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function renderScanner() {
+  const grid = document.getElementById('scannerGrid');
+  if(!watchlist.length) { grid.innerHTML='<div class="empty">Добавь акции в список и запусти робота</div>'; return; }
+
+  const sorted = [...watchlist].sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
+  grid.innerHTML = sorted.map(w=>{
+    const cls = w.status==='scanning'?'scanning': w.signal.includes('ЛОНГ')?'long': w.signal.includes('ШОРТ')?'short':'wait';
+    const sigCls = cls;
+    const confColor = w.confidence>=70?'var(--green)':w.confidence>=40?'var(--amber)':'var(--muted)';
+    const factorPills = w.factors.slice(0,4).map(f=>`<span class="sf-pill ${f.dir}">${f.name}</span>`).join('');
+    const priceStr = w.price ? fmt(w.price)+' ₽' : '—';
+    const scanInfo = w.lastScan ? w.lastScan : '—';
+    const hasPos   = openPositions.find(p=>p.ticker===w.ticker);
+    const posBadge = hasPos ? `<span style="font-size:9px;background:rgba(255,171,0,.15);border:1px solid rgba(255,171,0,.3);color:var(--amber);border-radius:3px;padding:1px 5px;margin-left:4px">${hasPos.direction.toUpperCase()}</span>` : '';
+
+    return `<div class="scan-row ${cls} flash" onclick="selectTicker('${w.ticker}')">
+      <div><div class="sr-ticker">${w.ticker}${posBadge}</div><div style="font-size:9px;color:var(--muted);margin-top:2px">${scanInfo}</div></div>
+      <div class="sr-price">${priceStr}</div>
+      <div class="sr-signal ${sigCls}">${w.status==='scanning'?'⟳ СКАН':w.signal}</div>
+      <div class="sr-factors">${factorPills}</div>
+      <div class="sr-conf">
+        <span class="conf-val" style="color:${confColor}">${w.confidence.toFixed(0)}%</span>
+        <div class="conf-bar"><div class="conf-fill" style="width:${w.confidence}%;background:${confColor}"></div></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px">счёт ${(w.score>=0?'+':'')+w.score.toFixed(1)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPositions() {
+  const body = document.getElementById('positionsBody');
+  const closeAllBtn2 = document.getElementById('closeAllBtn2');
+  if(!openPositions.length) {
+    body.innerHTML = '<div class="empty">Нет открытых позиций</div>';
+    closeAllBtn2.style.display='none';
+    return;
+  }
+  closeAllBtn2.style.display='';
+
+  body.innerHTML = openPositions.map(pos=>{
+    const w = watchlist.find(x=>x.ticker===pos.ticker);
+    const currentPrice = w?.price || pos.entryPrice;
+    const pnl = pos.direction==='long'
+      ? (currentPrice-pos.entryPrice)*pos.qty
+      : (pos.entryPrice-currentPrice)*pos.qty;
+    const pnlPct = (pos.direction==='long'
+      ? (currentPrice-pos.entryPrice)/pos.entryPrice
+      : (pos.entryPrice-currentPrice)/pos.entryPrice)*100;
+    const pnlColor = pnl>=0?'var(--green)':'var(--red)';
+    // progress to TP
+    const sl = parseFloat(document.getElementById('stopLoss').value)||2;
+    const tp = parseFloat(document.getElementById('takeProfit').value)||4;
+    const progress = Math.max(0,Math.min(100, (pnlPct+sl)/(tp+sl)*100));
+
+    return `<div class="pos-item">
+      <div class="pos-top">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pos-ticker">${pos.ticker}</span>
+          <span class="pos-dir ${pos.direction}">${pos.direction==='long'?'▲ ЛОНГ':'▼ ШОРТ'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="pos-pnl" style="color:${pnlColor}">${fmtPnl(pnl)}</span>
+          <span style="font-size:11px;color:${pnlColor}">(${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%)</span>
+          <button class="btn r" style="padding:3px 10px;font-size:9px" onclick="manualClose('${pos.ticker}')">ЗАКРЫТЬ</button>
+        </div>
+      </div>
+      <div class="pos-details">
+        <span>Лотов: <b>${pos.qty}</b></span>
+        <span>Вход: <b>${fmt(pos.entryPrice)} ₽</b></span>
+        <span>Текущая: <b>${fmt(currentPrice)} ₽</b></span>
+        <span style="color:var(--red)">Стоп: <b style="color:var(--red)">${fmt(pos.stopPrice)} ₽</b></span>
+        <span style="color:var(--green)">Тейк: <b style="color:var(--green)">${fmt(pos.targetPrice)} ₽</b></span>
+        <span>Открыта в ${pos.entryTime}</span>
+      </div>
+      <div class="pos-progress"><div class="pos-prog-fill" style="width:${progress}%;background:${pnlColor}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+async function manualClose(ticker) {
+  const pos = openPositions.find(p=>p.ticker===ticker);
+  if(!pos) return;
+  const w = watchlist.find(x=>x.ticker===ticker);
+  const price = w?.price || await getLastPrice(pos.figi);
+  if(!price) { log('Не удалось получить цену для '+ticker,'err'); return; }
+  await closePosition(pos, price, 'Ручное закрытие');
+  renderPositions(); updateMetrics();
+}
+
+function selectTicker(ticker) {
+  log('Выбран тикер: '+ticker,'info');
+}
+
+function addTradeRecord(rec) {
+  tradesHistory.unshift(rec);
+  const tbody = document.getElementById('tradesBody');
+  const pnlHtml = rec.pnl!==null
+    ? `<span style="color:${rec.pnl>=0?'var(--green)':'var(--red)'}">${fmtPnl(rec.pnl)}</span>`
+    : '<span style="color:var(--muted)">—</span>';
+  const badgeCls = rec.action.includes('ПОКУПКА')?'badge-buy':'badge-sell';
+  const row = document.createElement('tr');
+  row.className = 'flash';
+  row.innerHTML = `
+    <td style="color:var(--muted)">${rec.time}</td>
+    <td style="font-weight:700;color:var(--accent)">${rec.ticker}</td>
+    <td><span class="badge ${badgeCls}">${rec.action}</span></td>
+    <td>${rec.qty} лот</td>
+    <td>${fmt(rec.price)} ₽</td>
+    <td style="color:var(--muted)">${fmt(rec.sum)} ₽</td>
+    <td>${pnlHtml}</td>
+    <td style="color:var(--muted);font-size:10px">${rec.reason}</td>`;
+  if(tbody.querySelector('td[colspan]')) tbody.innerHTML='';
+  tbody.prepend(row);
+}
+
+function clearTrades() { tradesHistory=[]; document.getElementById('tradesBody').innerHTML='<tr><td colspan="8"><div class="empty">Сделок нет</div></td></tr>'; }
+
+function updateMetrics() {
+  document.getElementById('mWatching').textContent  = watchlist.length;
+  document.getElementById('mPositions').textContent = openPositions.length;
+  document.getElementById('mTrades').textContent    = tradesCount;
+  document.getElementById('mCycles').textContent    = cycleCount;
+  const pnlEl = document.getElementById('mPnl');
+  pnlEl.textContent = fmtPnl(sessionPnl);
+  pnlEl.className = 'metric-val '+(sessionPnl>=0?'g':'r');
+
+  // Best signal
+  const best = [...watchlist].filter(w=>w.status==='ok'&&w.signal!=='ЖДАТЬ').sort((a,b)=>Math.abs(b.score)-Math.abs(a.score))[0];
+  if(best) {
+    const sigEl = document.getElementById('mBestSignal');
+    sigEl.textContent = best.signal;
+    sigEl.className = 'metric-val '+(best.signal.includes('ЛОНГ')?'g':best.signal.includes('ШОРТ')?'r':'a');
+    document.getElementById('mBestTicker').textContent = best.ticker+' '+best.confidence.toFixed(0)+'%';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+log('Trading Robot v2 Multi-Ticker загружен.','info');
+log('⚠ Протестируй в Sandbox перед реальными деньгами!','warn');
+renderChips();
+updateMetrics();
+</script>
+</body>
+</html>
