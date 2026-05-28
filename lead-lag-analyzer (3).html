@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead-Lag Analyzer — T-Invest</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@300;400;600&display=swap');
+  :root{--bg:#0a0c0f;--surface:#111418;--card:#161b22;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#e8ecf0;--muted:#5a6472;--green:#00e676;--red:#ff3d57;--amber:#ffab00;--blue:#448aff;--accent:#00e5ff;--purple:#b388ff;--mono:'JetBrains Mono',monospace;--display:'Unbounded',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px);}
+  .app{max-width:1300px;margin:0 auto;padding:20px;}
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+  .logo{display:flex;align-items:center;gap:12px;}
+  .logo-icon{width:42px;height:42px;border:1.5px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(0,229,255,0.06);}
+  .logo-title{font-family:var(--display);font-size:13px;font-weight:600;letter-spacing:.05em;}
+  .logo-sub{font-size:10px;color:var(--muted);letter-spacing:.08em;margin-top:2px;}
+  .status-pill{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:5px 13px;}
+  .sdot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s;}
+  .sdot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+  .sdot.sim{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:pulse 1.5s infinite;}
+  .sdot.err{background:var(--red);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .two-col{display:grid;grid-template-columns:320px 1fr;gap:14px;align-items:start;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:12px;}
+  .card:last-child{margin-bottom:0;}
+  .ct{font-family:var(--display);font-size:9px;font-weight:600;color:var(--accent);letter-spacing:.14em;margin-bottom:12px;}
+  .fld{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+  .fl{font-size:10px;color:var(--muted);letter-spacing:.06em;}
+  .inp{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
+  .inp:focus{border-color:var(--accent);}
+  select.inp{cursor:pointer;}
+  .btn{background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;padding:8px 16px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .btn:hover{background:rgba(0,229,255,.08);}
+  .btn:disabled{opacity:.38;cursor:not-allowed;}
+  .btn.g{border-color:var(--green);color:var(--green);}
+  .btn.g:hover{background:rgba(0,230,118,.08);}
+  .btn.r{border-color:var(--red);color:var(--red);}
+  .btn.r:hover{background:rgba(255,61,87,.08);}
+  .btn.a{border-color:var(--amber);color:var(--amber);}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+  .mg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+  @media(max-width:600px){.mg{grid-template-columns:1fr 1fr;}}
+  .met{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 13px;}
+  .ml{font-size:9px;color:var(--muted);letter-spacing:.08em;margin-bottom:4px;}
+  .mv{font-family:var(--display);font-size:22px;font-weight:600;}
+  .mv.g{color:var(--green)}.mv.r{color:var(--red)}.mv.c{color:var(--accent)}.mv.a{color:var(--amber)}
+  .ms{font-size:10px;color:var(--muted);margin-top:2px;}
+  .cw{position:relative;width:100%;height:220px;}
+  .cw.tall{height:260px;}
+  .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  @media(max-width:700px){.chart-row{grid-template-columns:1fr;}}
+  .interp{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.18);border-left:3px solid var(--accent);border-radius:10px;padding:12px 16px;font-size:11px;line-height:1.9;margin-bottom:12px;}
+  .interp b{color:var(--accent);}
+  .log-body{font-size:11px;color:var(--muted);line-height:1.9;max-height:130px;overflow-y:auto;}
+  .log-body::-webkit-scrollbar{width:3px;}
+  .log-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+  .ll{display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,.025);padding:1px 0;}
+  .lt{color:var(--muted);min-width:56px;flex-shrink:0;}
+  .lm.ok{color:var(--green)}.lm.err{color:var(--red)}.lm.info{color:var(--accent)}.lm.warn{color:var(--amber)}
+  .badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:3px;background:rgba(0,229,255,.1);color:var(--accent);border:1px solid rgba(0,229,255,.2);}
+  .warn-banner{background:rgba(255,171,0,.07);border:1px solid rgba(255,171,0,.28);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;}
+  .warn-text{font-size:11px;color:var(--amber);line-height:1.8;}
+  .presets{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+  .pb{background:transparent;border:1px solid var(--border2);border-radius:4px;padding:2px 9px;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;transition:all .15s;}
+  .pb:hover{border-color:var(--accent);color:var(--accent);}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;min-height:24px;}
+  .chip{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600;color:var(--accent);border-color:rgba(0,229,255,.3);}
+  .cdel{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0;}
+  .cdel:hover{color:var(--red);}
+  .div{border:none;border-top:1px solid var(--border);margin:10px 0;}
+  input[type=range]{width:100%;accent-color:var(--accent);height:4px;}
+  .range-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .range-val{font-size:12px;font-weight:600;color:var(--accent);}
+  .cors-note{background:rgba(179,136,255,.06);border:1px solid rgba(179,136,255,.2);border-radius:8px;padding:10px 13px;font-size:10px;color:var(--purple);line-height:1.8;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <polyline points="2,18 6,10 10,14 14,6 18,10 22,4" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="2" y1="18" x2="22" y2="18" stroke="#00e5ff" stroke-width="1" stroke-dasharray="2,3" opacity=".4"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-title">LEAD-LAG ANALYZER</div>
+      <div class="logo-sub">TINKOFF INVEST · CROSS-CORRELATION · MOEX</div>
+    </div>
+  </div>
+  <div class="status-pill">
+    <span class="sdot" id="sDot"></span>
+    <span style="font-size:11px;color:var(--muted)" id="sTxt">не подключено</span>
+  </div>
+</div>
+
+<div class="warn-banner">
+  <div style="font-size:18px;flex-shrink:0">📡</div>
+  <div class="warn-text">Анализ <b>lead-lag эффекта</b> — определяет какой инструмент движется первым и с каким лагом (0–30 мин) следует второй. Данные через REST API Тинькофф. <b>Токен нужен только с правом «Котировки» (read-only).</b></div>
+</div>
+
+<div class="two-col">
+
+<!-- LEFT PANEL -->
+<div>
+  <div class="card">
+    <div class="ct">ПОДКЛЮЧЕНИЕ К API</div>
+    <div class="fld">
+      <div class="fl">ТОКЕН TINKOFF INVEST</div>
+      <input id="tokenInput" class="inp" type="password" placeholder="t.xxxxxxxxxxxxxxxx..." autocomplete="off">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn g" onclick="connect()">ПОДКЛЮЧИТЬ</button>
+      <button class="btn r" id="discBtn" style="display:none" onclick="disconnect()">ОТКЛЮЧИТЬ</button>
+    </div>
+    <div class="cors-note">
+      🔑 <a href="https://www.tbank.ru/invest/settings/api/" target="_blank" style="color:var(--purple)">Инвестиции → Профиль → API</a> — нужен токен с правом <b>«Котировки»</b>. Торговые права не нужны.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">ИНСТРУМЕНТЫ ДЛЯ АНАЛИЗА</div>
+    <div class="fld">
+      <div class="fl">ТИКЕР А — ЛИДЕР (предполагаемый)</div>
+      <select id="selA" class="inp"></select>
+    </div>
+    <div class="fld">
+      <div class="fl">ТИКЕР Б — СЛЕДУЕТ за А</div>
+      <select id="selB" class="inp"></select>
+    </div>
+    <div class="fld">
+      <div class="fl">МАКС. ЛАГ (тиков/минут)</div>
+      <div class="range-header"><span style="font-size:10px;color:var(--muted)">0</span><span class="range-val" id="lagVal">30</span><span style="font-size:10px;color:var(--muted)">60</span></div>
+      <input type="range" id="lagRange" min="5" max="60" value="30" oninput="document.getElementById('lagVal').textContent=this.value">
+    </div>
+    <div class="fld">
+      <div class="fl">ИНТЕРВАЛ ОБНОВЛЕНИЯ</div>
+      <select id="intervalSel" class="inp">
+        <option value="30">30 секунд</option>
+        <option value="60" selected>1 минута</option>
+        <option value="120">2 минуты</option>
+        <option value="300">5 минут</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn g" id="startBtn" onclick="startAnalysis()">▶ ЗАПУСТИТЬ</button>
+      <button class="btn r" id="stopBtn" style="display:none" onclick="stopAnalysis()">■ СТОП</button>
+    </div>
+    <div class="presets">
+      <span style="font-size:10px;color:var(--muted)">Быстрые пары:</span>
+      <button class="pb" onclick="setPair('SBER','LKOH')">SBER/LKOH</button>
+      <button class="pb" onclick="setPair('GAZP','NVTK')">GAZP/NVTK</button>
+      <button class="pb" onclick="setPair('SBER','GAZP')">SBER/GAZP</button>
+      <button class="pb" onclick="setPair('YNDX','OZON')">YNDX/OZON</button>
+      <button class="pb" onclick="setPair('GMKN','PLZL')">GMKN/PLZL</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">ИСТОРИЯ СЕССИИ</div>
+    <div class="log-body" id="logBody"><div style="color:var(--muted);font-size:11px">Лог пустой...</div></div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div>
+  <div class="mg">
+    <div class="met"><div class="ml">ЛАГ МАКС. КОРР.</div><div class="mv c" id="mLag">—</div><div class="ms">тиков/минут</div></div>
+    <div class="met"><div class="ml">МАКС. КОРРЕЛЯЦИЯ</div><div class="mv" id="mCorr">—</div><div class="ms">коэфф. Пирсона</div></div>
+    <div class="met"><div class="ml">КОРР. ПРИ ЛАГЕ 0</div><div class="mv" id="mZero">—</div><div class="ms">синхронная</div></div>
+    <div class="met"><div class="ml">ПРИРОСТ ОТ ЛАГА</div><div class="mv" id="mGain">—</div><div class="ms">улучшение</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">КРОСС-КОРРЕЛЯЦИЯ ПО ЛАГАМ</div>
+      <span class="badge" id="ptsBadge">0 тиков</span>
+    </div>
+    <div class="cw tall"><canvas id="c1"></canvas></div>
+  </div>
+
+  <div class="chart-row">
+    <div class="card" style="margin-bottom:0">
+      <div class="ct">НОРМАЛИЗОВАННЫЕ ЦЕНЫ</div>
+      <div style="display:flex;gap:12px;margin-bottom:8px;font-size:10px">
+        <span style="color:var(--accent)">━ <span id="legA">A</span></span>
+        <span style="color:#e05c8a">╌ <span id="legB">B</span></span>
+      </div>
+      <div class="cw"><canvas id="c2"></canvas></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="ct">КОРРЕЛЯЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ</div>
+      <div class="cw"><canvas id="c3"></canvas></div>
+    </div>
+  </div>
+
+  <div class="interp" id="interp">Выберите два тикера и нажмите <b>▶ ЗАПУСТИТЬ</b> для начала анализа. Для работы с реальными данными подключите токен слева.</div>
+
+</div>
+</div>
+</div>
+
+<script>
+const BASE = 'https://invest-public-api.tinkoff.ru/rest';
+// No proxy needed — Tinkoff API supports CORS directly
+
+const INSTRUMENTS = {
+  "SBER":"BBG004730N88","LKOH":"BBG004731032","GAZP":"BBG004730RP0",
+  "YNDX":"BBG006L8G4H1","ROSN":"BBG004731354","GMKN":"BBG004731489",
+  "NVTK":"BBG00475KKY8","TATN":"BBG004RVFCY3","MGNT":"BBG004RVFFC0",
+  "MTSS":"BBG004S681B4","VTBR":"BBG004730ZJ9","ALRS":"BBG004S68B31",
+  "PLZL":"BBG000VFX6Y4","CHMF":"BBG00475K6C3","NLMK":"BBG004S681B4",
+  "FIVE":"BBG00JXPFBN0","OZON":"BBG00Y91R9T3","TCSG":"BBG00QPYJ5H0",
+  "POSI":"BBG000N16BP3","PIKK":"BBG004S68829",
+};
+
+let token = null, pollTimer = null, corrHistory = [];
+let pricesA = [], pricesB = [], timesA = [];
+let ch1=null, ch2=null, ch3=null;
+let isReal = false;
+
+// ── Init selects ──
+(function(){
+  const sA=document.getElementById('selA'), sB=document.getElementById('selB');
+  Object.keys(INSTRUMENTS).forEach((t,i)=>{
+    sA.innerHTML+=`<option value="${t}">${t}</option>`;
+    sB.innerHTML+=`<option value="${t}" ${i===1?'selected':''}>${t}</option>`;
+  });
+})();
+
+function setPair(a,b){
+  document.getElementById('selA').value=a;
+  document.getElementById('selB').value=b;
+}
+
+// ── Logging ──
+function addLog(msg, type=''){
+  const el=document.getElementById('logBody');
+  const t=new Date().toLocaleTimeString('ru');
+  el.innerHTML=`<div class="ll"><span class="lt">${t}</span><span class="lm ${type}">${msg}</span></div>`+el.innerHTML;
+}
+
+// ── Status ──
+function setStatus(s){
+  const map={live:['live','реалтайм'],sim:['sim','симуляция'],con:['','подключение...'],off:['','не подключено'],err:['err','ошибка']};
+  const[c,l]=map[s]||['',''];
+  document.getElementById('sDot').className='sdot '+c;
+  document.getElementById('sTxt').textContent=l;
+}
+
+// ── Connect ──
+async function connect(){
+  token = document.getElementById('tokenInput').value.trim();
+  if(!token){addLog('Введите токен','err');return;}
+  setStatus('con');
+  addLog('Проверяем токен...','info');
+  try{
+    const r = await apiCall('/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts',{});
+    if(r && r.accounts){
+      isReal=true;
+      setStatus('live');
+      addLog(`Подключено. Счетов: ${r.accounts.length}`,'ok');
+      document.getElementById('discBtn').style.display='';
+    }
+  }catch(e){
+    addLog('Ошибка подключения: '+e.message,'err');
+    setStatus('err');
+    token=null;
+  }
+}
+
+function disconnect(){
+  token=null; isReal=false;
+  setStatus('off');
+  addLog('Отключено','warn');
+  document.getElementById('discBtn').style.display='none';
+}
+
+// ── API call through CORS proxy ──
+async function apiCall(endpoint, body){
+  const url = BASE + endpoint;
+  const r = await fetch(url,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json'},mode:'cors',credentials:'omit',
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+// ── Fetch candles (last 2 days, 1min interval) ──
+function unitsNano(v){if(!v)return 0;return parseFloat((parseInt(v.units||0)+(parseInt(v.nano||0)/1e9)).toFixed(4));}
+
+async function fetchCandles(figi){
+  const now = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - 2);
+  const data = await apiCall(
+    '/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles',
+    {figi, from: from.toISOString(), to: now.toISOString(), interval: 2}
+  );
+  return (data.candles || []).map(c => ({
+    price: unitsNano(c.close),
+    time: new Date(c.time).toLocaleTimeString('ru', {hour:'2-digit', minute:'2-digit'})
+  }));
+}
+
+// ── Simulation ──
+let simBuf=[], simVal=100;
+function simPrice(lag){
+  simVal += (Math.random()-0.49)*0.5;
+  simBuf.push(simVal);
+  const bPrice = simBuf.length>lag ? simBuf[simBuf.length-lag-1]+(Math.random()-0.5)*0.4 : simVal;
+  return {a:simVal, b:bPrice};
+}
+
+// ── Math ──
+function returns(arr){return arr.slice(1).map((v,i)=>v-arr[i]);}
+function pearson(x,y){
+  const n=Math.min(x.length,y.length);
+  if(n<5)return 0;
+  const[xa,ya]=[x.slice(0,n),y.slice(0,n)];
+  const mx=xa.reduce((s,v)=>s+v,0)/n, my=ya.reduce((s,v)=>s+v,0)/n;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<n;i++){num+=(xa[i]-mx)*(ya[i]-my);dx+=(xa[i]-mx)**2;dy+=(ya[i]-my)**2;}
+  return Math.sqrt(dx*dy)<1e-12?0:num/Math.sqrt(dx*dy);
+}
+function crossCorr(maxLag){
+  const ra=returns(pricesA), rb=returns(pricesB);
+  return Array.from({length:maxLag+1},(_,lag)=>{
+    const xa=lag>0?ra.slice(0,-lag):ra, yb=rb.slice(lag)||rb;
+    return +pearson(xa,yb).toFixed(4);
+  });
+}
+
+// ── Start/Stop ──
+async function startAnalysis(){
+  const a=document.getElementById('selA').value, b=document.getElementById('selB').value;
+  if(a===b){addLog('Выберите разные тикеры','err');return;}
+  pricesA=[];pricesB=[];timesA=[];corrHistory=[];simBuf=[];simVal=100;
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('stopBtn').style.display='';
+  document.getElementById('legA').textContent=a;
+  document.getElementById('legB').textContent=b;
+  addLog(`Анализ: ${a} / ${b}`,'info');
+  if(!isReal) addLog('Токен не задан — режим симуляции','warn');
+  await tick(a,b);
+  const sec = parseInt(document.getElementById('intervalSel').value)||60;
+  pollTimer = setInterval(()=>tick(a,b), sec*1000);
+}
+
+function stopAnalysis(){
+  clearInterval(pollTimer); pollTimer=null;
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stopBtn').style.display='none';
+  addLog('Анализ остановлен','warn');
+}
+
+async function tick(a,b){
+  if(isReal && token){
+    try{
+      const [candlesA, candlesB] = await Promise.all([
+        fetchCandles(INSTRUMENTS[a]),
+        fetchCandles(INSTRUMENTS[b])
+      ]);
+      if(candlesA.length > 10 && candlesB.length > 10){
+        const n = Math.min(candlesA.length, candlesB.length);
+        pricesA = candlesA.slice(-n).map(c=>c.price);
+        pricesB = candlesB.slice(-n).map(c=>c.price);
+        timesA  = candlesA.slice(-n).map(c=>c.time);
+        addLog(`${a}: ${candlesA.length} свечей | ${b}: ${candlesB.length} свечей`,'ok');
+      } else {
+        addLog('Мало свечей — биржа закрыта или нет данных','warn');
+      }
+    }catch(e){addLog('Ошибка API: '+e.message,'err');}
+  } else {
+    const{a:pa,b:pb}=simPrice(10);
+    pricesA.push(pa); pricesB.push(pb);
+    timesA.push(new Date().toLocaleTimeString('ru'));
+    if(pricesA.length>300){pricesA.shift();pricesB.shift();timesA.shift();}
+  }
+  if(pricesA.length>40) render(a,b);
+}
+
+// ── Render ──
+function render(a,b){
+  const maxLag=parseInt(document.getElementById('lagRange').value)||30;
+  const corrs=crossCorr(maxLag);
+  const best=corrs.reduce((bi,v,i)=>Math.abs(v)>Math.abs(corrs[bi])?i:bi,0);
+  const gain=+(corrs[best]-corrs[0]).toFixed(4);
+
+  document.getElementById('ptsBadge').textContent=pricesA.length+' тиков';
+  document.getElementById('mLag').textContent=best+' мин';
+  setMet('mCorr',corrs[best]);
+  setMet('mZero',corrs[0]);
+  setMet('mGain',gain,true);
+
+  corrHistory.push({t:new Date().toLocaleTimeString('ru'),v:corrs[best]});
+  if(corrHistory.length>80)corrHistory.shift();
+
+  // Chart 1 — cross corr bars
+  const bgc=corrs.map((_,i)=>i===best?'#00e5ff':'rgba(0,229,255,0.25)');
+  if(ch1)ch1.destroy();
+  ch1=new Chart(document.getElementById('c1'),{type:'bar',data:{labels:corrs.map((_,i)=>i),datasets:[{data:corrs,backgroundColor:bgc,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` r = ${c.parsed.y.toFixed(4)}`},backgroundColor:'#161b22',borderColor:'rgba(255,255,255,.13)',borderWidth:1}},scales:{x:{ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Лаг (тики)',color:'#5a6472',font:{size:10}}},y:{min:-1,max:1,ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  // Chart 2 — prices
+  const last=100, pA=pricesA.slice(-last), pB=pricesB.slice(-last), tA=timesA.slice(-last);
+  const nm=arr=>{const mn=Math.min(...arr),mx=Math.max(...arr);return arr.map(v=>mx-mn<1e-9?0:(v-mn)/(mx-mn));};
+  if(ch2)ch2.destroy();
+  ch2=new Chart(document.getElementById('c2'),{type:'line',data:{labels:tA,datasets:[{data:nm(pA),borderColor:'#00e5ff',borderWidth:1.5,pointRadius:0,tension:0.3},{data:nm(pB),borderColor:'#e05c8a',borderWidth:1.5,pointRadius:0,tension:0.3,borderDash:[5,3]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a6472',maxTicksLimit:5,font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  // Chart 3 — live corr
+  if(ch3)ch3.destroy();
+  ch3=new Chart(document.getElementById('c3'),{type:'line',data:{labels:corrHistory.map(p=>p.t),datasets:[{data:corrHistory.map(p=>p.v),borderColor:'#00e676',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(0,230,118,0.06)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a6472',maxTicksLimit:4,font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},y:{min:-1,max:1,ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  // Interpretation
+  const abs=Math.abs(corrs[best]);
+  const str=abs>0.6?'<b style="color:var(--green)">сильный</b>':abs>0.35?'<b style="color:var(--amber)">умеренный</b>':abs>0.15?'слабый':'незначимый';
+  const dir=corrs[best]>0?'в том же направлении':'в обратном направлении';
+  let txt;
+  if(abs<0.15) txt=`Значимой кросс-корреляции между <b>${a}</b> и <b>${b}</b> не обнаружено (r = ${corrs[best].toFixed(3)}). Инструменты движутся независимо.`;
+  else if(best===0) txt=`<b>${a}</b> и <b>${b}</b> движутся <b>синхронно</b> (лаг = 0, r = ${corrs[best].toFixed(3)}). Оба реагируют на рыночный фактор одновременно.`;
+  else txt=`Обнаружен ${str} lead-lag эффект: <b>${a}</b> опережает <b>${b}</b> на <b>${best} тиков</b> (r = ${corrs[best].toFixed(3)}). ${b} движется ${dir} с запозданием. Прирост корреляции от учёта лага: ${gain>0?'+':''}${gain}. ${abs>0.4?'Эффект значим — можно использовать в краткосрочных стратегиях.':'Накапливайте больше данных для подтверждения.'}`;
+  document.getElementById('interp').innerHTML=txt;
+}
+
+function setMet(id,v,isGain){
+  const el=document.getElementById(id);
+  el.textContent=(isGain&&v>0?'+':'')+v.toFixed(3);
+  el.className='mv '+(v>0.05?'g':v<-0.05?'r':'c');
+}
+</script>
+</body>
+</html>
