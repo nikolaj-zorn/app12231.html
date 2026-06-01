@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead-Lag Analyzer — T-Invest (НСК)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lead-Lag">
+<meta name="theme-color" content="#0a0c0f">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@300;400;600&display=swap');
+:root{--bg:#0a0c0f;--surface:#111418;--card:#161b22;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#e8ecf0;--muted:#5a6472;--green:#00e676;--red:#ff3d57;--amber:#ffab00;--blue:#448aff;--accent:#00e5ff;--purple:#b388ff;--mono:'JetBrains Mono',monospace;--display:'Unbounded',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;}
+.app{max-width:1600px;margin:0 auto;padding:14px;}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:38px;height:38px;border:1.5px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(0,229,255,0.06);}
+.logo-title{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.05em;}
+.logo-sub{font-size:9px;color:var(--muted);letter-spacing:.07em;margin-top:2px;}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.msk-block{text-align:right;}
+.msk-clock{font-family:var(--display);font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.05em;}
+.msk-label{font-size:9px;color:var(--muted);letter-spacing:.06em;}
+.market-status{font-size:10px;padding:3px 9px;border-radius:10px;font-weight:600;letter-spacing:.04em;}
+.market-status.open{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25);}
+.market-status.closed{background:rgba(255,61,87,.1);color:var(--red);border:1px solid rgba(255,61,87,.2);}
+.spill{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:5px 12px;}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sdot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+.sdot.sim{background:var(--amber);animation:pulse 1.5s infinite;}
+.sdot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.two-col{display:grid;grid-template-columns:310px 1fr;gap:12px;align-items:start;}
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+.card{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:10px;}
+.ct{font-family:var(--display);font-size:9px;font-weight:600;color:var(--accent);letter-spacing:.14em;margin-bottom:10px;}
+.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.fl{font-size:10px;color:var(--muted);letter-spacing:.06em;}
+.inp{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
+.inp:focus{border-color:var(--accent);}
+.btn{background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.07em;padding:7px 14px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{background:rgba(0,229,255,.08);}
+.btn:disabled{opacity:.38;cursor:not-allowed;}
+.btn.g{border-color:var(--green);color:var(--green);}
+.btn.g:hover{background:rgba(0,230,118,.08);}
+.btn.r{border-color:var(--red);color:var(--red);}
+.btn.r:hover{background:rgba(255,61,87,.08);}
+
+/* Поиск тикеров */
+.ticker-search-wrap{position:relative;}
+.ticker-search{background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;width:100%;transition:border-color .15s;}
+.ticker-search:focus{border-color:var(--accent);}
+.ticker-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--border2);border-radius:8px;z-index:100;max-height:220px;overflow-y:auto;display:none;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.ticker-dropdown.show{display:block;}
+.ticker-item{padding:7px 12px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.ticker-item:last-child{border-bottom:none;}
+.ticker-item:hover{background:rgba(0,229,255,.06);}
+.ticker-item .tic{font-weight:600;color:var(--accent);min-width:60px;}
+.ticker-item .nam{color:var(--muted);font-size:10px;flex:1;}
+.ticker-item .sec{font-size:9px;color:var(--border2);background:var(--surface);padding:1px 5px;border-radius:3px;white-space:nowrap;}
+.selected-ticker{display:flex;align-items:center;gap:6px;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.3);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--accent);margin-top:4px;min-height:30px;}
+.selected-ticker .clr{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;margin-left:auto;line-height:1;}
+.selected-ticker .clr:hover{color:var(--red);}
+
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
+@media(max-width:600px){.mg{grid-template-columns:1fr 1fr;}}
+.met{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.ml{font-size:9px;color:var(--muted);letter-spacing:.07em;margin-bottom:3px;}
+.mv{font-family:var(--display);font-size:20px;font-weight:600;}
+.mv.g{color:var(--green)}.mv.r{color:var(--red)}.mv.c{color:var(--accent)}
+.ms{font-size:9px;color:var(--muted);margin-top:2px;}
+.cw{position:relative;width:100%;height:200px;}
+.cw.tall{height:240px;}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+@media(max-width:700px){.chart-row{grid-template-columns:1fr;}}
+.chart-time{font-size:9px;color:var(--muted);text-align:right;margin-top:3px;}
+.interp{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.18);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;font-size:11px;line-height:1.9;margin-bottom:10px;}
+.interp b{color:var(--accent);}
+.log-body{font-size:11px;color:var(--muted);line-height:1.9;max-height:110px;overflow-y:auto;}
+.ll{display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,.025);padding:1px 0;}
+.lt{color:var(--muted);min-width:56px;flex-shrink:0;}
+.lm.ok{color:var(--green)}.lm.err{color:var(--red)}.lm.info{color:var(--accent)}.lm.warn{color:var(--amber)}
+.badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(0,229,255,.1);color:var(--accent);border:1px solid rgba(0,229,255,.2);}
+.ctitle-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.presets-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;}
+.pb{background:transparent;border:1px solid var(--border2);border-radius:4px;padding:3px 7px;font-family:var(--mono);font-size:9px;color:var(--muted);cursor:pointer;transition:all .15s;text-align:left;}
+.pb:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── Мобильная адаптация ── */
+@media(max-width:600px){
+  .app{padding:8px;}
+  .header{gap:6px;margin-bottom:10px;}
+  .logo-sub{display:none;}
+  .msk-label{display:none;}
+  .msk-clock{font-size:13px;}
+  .two-col{grid-template-columns:1fr;gap:8px;}
+  .card{padding:10px;border-radius:10px;}
+  .ct{font-size:8px;margin-bottom:8px;}
+  .fl{font-size:10px;}
+  .inp{font-size:14px;padding:10px 12px;} /* больше для пальца */
+  .btn{font-size:12px;padding:11px 14px;} /* крупнее кнопки */
+  .ticker-search{font-size:14px;padding:10px 12px;}
+  .ticker-item{padding:12px 14px;} /* крупнее для тапа */
+  .ticker-item .tic{font-size:13px;min-width:80px;}
+  .ticker-item .nam{font-size:11px;}
+  .ticker-item .sec{display:none;} /* убираем категорию — не влезает */
+  .ticker-dropdown{max-height:260px;}
+  .selected-ticker{font-size:13px;padding:8px 12px;min-height:38px;}
+  .mg{grid-template-columns:1fr 1fr;gap:6px;}
+  .mv{font-size:18px;}
+  .ml{font-size:9px;}
+  .cw{height:160px;}
+  .cw.tall{height:190px;}
+  .chart-row{grid-template-columns:1fr;gap:8px;}
+  .chart-time{font-size:8px;}
+  .interp{font-size:11px;line-height:1.7;padding:10px 12px;}
+  .log-body{font-size:10px;max-height:130px;}
+  .presets-grid{grid-template-columns:1fr 1fr;gap:4px;}
+  .pb{font-size:9px;padding:6px 8px;} /* крупнее для тапа */
+  .spill{padding:4px 10px;}
+  .logo-icon{width:32px;height:32px;}
+}
+/* PWA — убираем отступ снизу для iPhone */
+@supports(padding:max(0px)){
+  .app{padding-bottom:max(14px,env(safe-area-inset-bottom));}
+}
+/* Сканер */
+.scan-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--border);}
+.scan-row:last-child{border-bottom:none;}
+.scan-row:hover{background:rgba(0,229,255,.05);}
+.scan-rank{font-size:11px;font-weight:600;color:var(--muted);min-width:18px;}
+.scan-pair{font-size:11px;font-weight:600;color:var(--accent);flex:1;}
+.scan-corr{font-size:11px;font-weight:600;}
+.scan-lag{font-size:10px;color:var(--muted);min-width:50px;text-align:right;}
+.scan-bar{height:3px;border-radius:2px;background:var(--accent);margin-top:2px;transition:width .4s;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <polyline points="2,18 6,10 10,14 14,6 18,10 22,4" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-title">LEAD-LAG ANALYZER</div>
+      <div class="logo-sub">TINKOFF INVEST · MOEX · CROSS-CORRELATION</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="msk-block">
+      <div class="msk-clock" id="mskClock">--:--:--</div>
+      <div class="msk-label">НОВОСИБИРСК</div>
+    </div>
+    <div id="marketStatus" class="market-status closed">БИРЖА ЗАКРЫТА</div>
+    <div class="spill">
+      <span class="sdot" id="sDot"></span>
+      <span style="font-size:11px;color:var(--muted)" id="sTxt">не подключено</span>
+    </div>
+  </div>
+</div>
+
+<div class="two-col">
+<div>
+
+  <div class="card">
+    <div class="ct">ПОДКЛЮЧЕНИЕ</div>
+    <div class="fld">
+      <div class="fl">ТОКЕН TINKOFF INVEST</div>
+      <input id="tokenInput" class="inp" type="password" placeholder="t.xxxxxxxxxxxxxxxx..." autocomplete="off" inputmode="text" style="font-size:14px">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn g" onclick="connect()">ПОДКЛЮЧИТЬ</button>
+      <button class="btn r" id="discBtn" style="display:none" onclick="disconnect()">ОТКЛЮЧИТЬ</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.7">
+      <a href="https://www.tbank.ru/invest/settings/api/" target="_blank" style="color:var(--purple)">Инвестиции → Профиль → API</a> — токен с правом <b style="color:var(--text)">«Котировки»</b>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">ВЫБОР ИНСТРУМЕНТОВ</div>
+
+    <div class="fld">
+      <div class="fl">ТИКЕР А — ЛИДЕР (поиск по тикеру или названию, 5-мин свечи)</div>
+      <div class="ticker-search-wrap">
+        <input class="ticker-search" id="searchA" placeholder="Напр: Сбер, LKOH, Газпром..." autocomplete="off"
+          oninput="searchTicker('A')" onfocus="showDrop('A')">
+        <div class="ticker-dropdown" id="dropA"></div>
+      </div>
+      <div class="selected-ticker" id="selA-display">
+        <span id="selA-text">не выбран</span>
+        <button class="clr" onclick="clearTicker('A')">✕</button>
+      </div>
+    </div>
+
+    <div class="fld">
+      <div class="fl">ТИКЕР Б — СЛЕДУЕТ (поиск по тикеру или названию, 5-мин свечи)</div>
+      <div class="ticker-search-wrap">
+        <input class="ticker-search" id="searchB" placeholder="Напр: ВТБ, TATN, Лукойл..." autocomplete="off"
+          oninput="searchTicker('B')" onfocus="showDrop('B')">
+        <div class="ticker-dropdown" id="dropB"></div>
+      </div>
+      <div class="selected-ticker" id="selB-display">
+        <span id="selB-text">не выбран</span>
+        <button class="clr" onclick="clearTicker('B')">✕</button>
+      </div>
+    </div>
+
+    <div class="fld">
+      <div class="fl">БЫСТРЫЕ ПАРЫ</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="pb" style="border-color:rgba(0,229,255,.4);color:var(--accent)" onclick="filterPresets('all')">Все</button>
+        <button class="pb" onclick="filterPresets('банки')">🏦 Банки</button>
+        <button class="pb" onclick="filterPresets('нефть')">🛢 Нефть</button>
+        <button class="pb" onclick="filterPresets('металлы')">⚙️ Металлы</button>
+        <button class="pb" onclick="filterPresets('крипто')">₿ Neo/Крипто</button>
+        <button class="pb" onclick="filterPresets('фьючерсы')">📊 Фьючерсы</button>
+        <button class="pb" onclick="filterPresets('tech')">💻 Тех.</button>
+        <button class="pb" onclick="filterPresets('разные')">🔀 Разные</button>
+        <button class="pb" onclick="filterPresets('3эш')">📉 3 эшелон</button>
+      </div>
+      <div class="presets-grid" id="presetsGrid">
+      </div>
+    </div>
+
+
+    <div class="fld">
+      <div class="fl">МАКС. ЛАГ (тиков)</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="range" id="lagRange" min="5" max="60" value="30"
+          oninput="document.getElementById('lagVal').textContent=this.value"
+          style="flex:1;accent-color:var(--accent)">
+        <span style="font-size:13px;font-weight:600;color:var(--accent);min-width:24px" id="lagVal">30</span>
+      </div>
+    </div>
+
+    <div class="fld">
+      <div class="fl">ПЕРИОД ДАННЫХ</div>
+      <select id="periodSelect" class="inp" style="font-size:12px">
+        <option value="0">Только сегодня</option>
+        <option value="1" selected>1 день</option>
+        <option value="3">3 дня</option>
+        <option value="7">7 дней</option>
+        <option value="14">14 дней</option>
+      </select>
+    </div>
+
+    <div class="fld">
+      <div class="fl">ИНТЕРВАЛ ОБНОВЛЕНИЯ</div>
+      <select id="intervalSel" class="inp">
+        <option value="30">30 секунд</option>
+        <option value="60" selected>1 минута</option>
+        <option value="120">2 минуты</option>
+        <option value="300">5 минут</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn g" id="startBtn" onclick="startAnalysis()" style="flex:1">▶ ЗАПУСТИТЬ</button>
+      <button class="btn r" id="stopBtn" style="display:none;flex:1" onclick="stopAnalysis()">■ СТОП</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">ИСТОРИЯ СЕССИИ</div>
+    <div class="log-body" id="logBody"><div style="color:var(--muted);font-size:11px">Лог пустой...</div></div>
+  </div>
+
+</div>
+<div>
+
+  <div class="mg">
+    <div class="met"><div class="ml">ЛАГ МАКС. КОРР.</div><div class="mv c" id="mLag">—</div><div class="ms">тиков × 5 мин</div></div>
+    <div class="met"><div class="ml">МАКС. КОРРЕЛЯЦИЯ</div><div class="mv" id="mCorr">—</div><div class="ms">коэфф. Пирсона</div></div>
+    <div class="met"><div class="ml">КОРР. ПРИ ЛАГЕ 0</div><div class="mv" id="mZero">—</div><div class="ms">синхронная</div></div>
+    <div class="met"><div class="ml">ПРИРОСТ ОТ ЛАГА</div><div class="mv" id="mGain">—</div><div class="ms">улучшение</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div class="ctitle-row">
+      <div class="ct" style="margin-bottom:0">КРОСС-КОРРЕЛЯЦИЯ ПО ЛАГАМ</div>
+      <div style="display:flex;gap:6px">
+        <span class="badge" id="ptsBadge">0 тиков</span>
+        <span class="badge" id="timeBadge" style="background:rgba(179,136,255,.1);color:var(--purple);border-color:rgba(179,136,255,.3)">—</span>
+      </div>
+    </div>
+    <div class="cw tall"><canvas id="c1"></canvas></div>
+    <div class="chart-time" id="chartTime1">—</div>
+  </div>
+
+  <div class="chart-row">
+    <div class="card" style="margin-bottom:0">
+      <div class="ctitle-row">
+        <div class="ct" style="margin-bottom:0">НОРМАЛИЗОВАННЫЕ ЦЕНЫ</div>
+        <div style="display:flex;gap:10px;font-size:10px">
+          <span style="color:var(--accent)">━ <span id="legA">A</span></span>
+          <span style="color:#e05c8a">╌ <span id="legB">B</span></span>
+        </div>
+      </div>
+      <div class="cw"><canvas id="c2"></canvas></div>
+      <div class="chart-time" id="chartTime2">—</div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="ctitle-row">
+        <div class="ct" style="margin-bottom:0">КОРРЕЛЯЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ</div>
+      </div>
+      <div class="cw"><canvas id="c3"></canvas></div>
+      <div class="chart-time" id="chartTime3">—</div>
+    </div>
+  </div>
+
+  <div class="interp" id="interp">Выберите два тикера и нажмите <b>▶ ЗАПУСТИТЬ</b>. Биржа: <b>Пн–Пт 10:00–18:50 НСК</b>.</div>
+
+</div>
+</div>
+</div>
+
+<script>
+// ── Справочник всех инструментов MOEX ──
+// Формат: [тикер, название, сектор, figi]
+const ALL_INSTRUMENTS = [
+  // 1-й эшелон
+  ['SBER','Сбербанк','Банки','BBG004730N88'],
+  ['SBERP','Сбербанк (пр.)','Банки','BBG0047315Y7'],
+  ['VTBR','ВТБ','Банки','BBG004730ZJ9'],
+  ['TCSG','Т-Банк (ТКС)','Банки','BBG00QPYJ5H0'],
+  ['CBOM','МКБ','Банки','BBG00DHTYPH9'],
+  ['BSPB','Банк СПб','Банки','BBG000QJW156'],
+  ['MOEX','Московская биржа','Финансы','BBG004730JJ5'],
+  ['SFIN','ЭсЭфАй','Финансы','BBG00GWRHL87'],
+  ['RENI','Ренессанс Страх.','Финансы','BBG000HLJ7M4'],
+  ['GAZP','Газпром','Нефть и газ','BBG004730RP0'],
+  ['LKOH','Лукойл','Нефть и газ','BBG004731032'],
+  ['ROSN','Роснефть','Нефть и газ','BBG004731354'],
+  ['NVTK','Новатэк','Нефть и газ','BBG00475KKY8'],
+  ['TATN','Татнефть','Нефть и газ','BBG004RVFCY3'],
+  ['TATNP','Татнефть (пр.)','Нефть и газ','BBG004S68BH6'],
+  ['SIBN','Газпромнефть','Нефть и газ','BBG004S686W0'],
+  ['SNGS','Сургутнефтегаз','Нефть и газ','BBG004S681M2'],
+  ['SNGSP','Сургутнефтегаз (пр.)','Нефть и газ','BBG004S681V5'],
+  ['GMKN','Норникель','Металлы','BBG004731489'],
+  ['PLZL','Полюс','Металлы','BBG000VFX6Y4'],
+  ['ALRS','Алроса','Металлы','BBG004S68B31'],
+  ['CHMF','Северсталь','Металлы','BBG00475K6C3'],
+  ['NLMK','НЛМК','Металлы','BBG004S681W1'],
+  ['MAGN','ММК','Металлы','BBG004TYCYB8'],
+  ['RUAL','Русал','Металлы','BBG008F2T3T2'],
+  ['VSMO','ВСМПО-АВИСМА','Металлы','BBG004S68BR7'],
+  ['PHOR','ФосАгро','Химия','BBG004S689R0'],
+  ['MGNT','Магнит','Ритейл','BBG004RVFFC0'],
+  ['FIVE','X5 Group','Ритейл','BBG00JXPFBN0'],
+  ['DSKY','Детский мир','Ритейл','BBG000QQPOB5'],
+  ['MVID','М.Видео','Ритейл','BBG004S68CP5'],
+  ['LENT','Лента','Ритейл','BBG00264HHHN'],
+  ['AFLT','Аэрофлот','Транспорт','BBG004S683W7'],
+  ['FESH','ДВМП/FESCO','Транспорт','BBG004S68DX8'],
+  ['NMTP','НМТП','Транспорт','BBG004S683X5'],
+  ['GLTR','Globaltrans','Транспорт','BBG000VFBQG4'],
+  ['FLOT','Совкомфлот','Транспорт','BBG000TPKZT4'],
+  ['YNDX','Яндекс','Технологии','BBG006L8G4H1'],
+  ['VKCO','ВКонтакте','Технологии','BBG00178PGX3'],
+  ['OZON','Ozon','Технологии','BBG00Y91R9T3'],
+  ['POSI','Позитив','Технологии','BBG000N16BP3'],
+  ['HEAD','Хэдхантер','Технологии','BBG00ZZLP5B9'],
+  ['ASTR','Астра','Технологии','BBG00ZZF7BY6'],
+  ['DIAS','Диасофт','Технологии','BBG00Y91R8X9'],
+  ['SOFL','Софтлайн','Технологии','BBG000RG0ZV6'],
+  ['PIKK','ПИК','Девелопмент','BBG004S68829'],
+  ['SMLT','Самолёт','Девелопмент','BBG00F6NK7J4'],
+  ['LSRG','ЛСР','Девелопмент','BBG004S68614'],
+  ['ETLN','Эталон','Девелопмент','BBG00HTHMPG8'],
+  ['AGRO','РусАгро','АПК','BBG005DXJS36'],
+  ['MDMG','МД Медикал','Медицина','BBG000RHCS45'],
+  ['GEMC','ЕМЦ','Медицина','BBG00GF55L74'],
+  ['AFKS','АФК Система','Холдинг','BBG004S68DD6'],
+  ['WUSH','Whoosh','Технологии','BBG00Y91R8T5'],
+  ['CIAN','Циан','Технологии','BBG00Y91R8X7'],
+  ['HHRU','Хэдхантер','Технологии','BBG00ZZLP5B9'],
+  ['MBNK','МТС Банк','Банки','BBG00Y7CLMH8'],
+  ['MTSS','МТС','Телеком','BBG004S681B4'],
+  ['RTKM','Ростелеком','Телеком','BBG004S684M6'],
+  ['RTKMP','Ростелеком (пр.)','Телеком','BBG004S684N5'],
+  ['TRMK','ТМК','Металлы 2эш','BBG004S68R04'],
+  ['RASP','Распадская','Уголь','BBG004S68598'],
+  ['ENPG','ЭН+','Энергетика','BBG00GF7LGF3'],
+  ['UWGN','НПК ОВК','Транспорт 2эш','BBG005FWFPN6'],
+  ['BELU','Белуга','Потребит.','BBG000VJ5CK6'],
+  ['FIXP','Fix Price','Ритейл','BBG00GF5P7X0'],
+  ['MTLR','Мечел','Металлы 2эш','BBG004S68JX6'],
+  ['MTLRP','Мечел (пр.)','Металлы 2эш','BBG004S68696'],
+  ['MTSS','МТС','Телеком','BBG004S681B4'],
+  ['TTLK','Таттелеком','Телеком','BBG004S68B31'],
+  ['IRAO','Интер РАО','Энергетика','BBG004S68698'],
+  ['FEES','ФСК ЕЭС','Энергетика','BBG004S681B6'],
+  ['MSNG','Мосэнерго','Энергетика','BBG004S68507'],
+  ['UPRO','Юнипро','Энергетика','BBG004S68CP5'],
+  ['TGKA','ТГК-1','Энергетика','BBG004S686N0'],
+  ['MRKP','МРСК Центра и Приволжья','Энергетика','BBG004S68BR7'],
+  ['MRKS','МРСК Сибири','Энергетика','BBG004S68B31'],
+  ['MRKZ','МРСК Северо-Запада','Энергетика','BBG004S68598'],
+  // Дополнительные акции 2-3 эшелон
+  ['AQUA','Инарктика (РусАква)','АПК','BBG00RPZXTN0'],
+  ['ABRD','Абрау-Дюрсо','Потребит.','BBG004S68507'],
+  ['SGZH','Сегежа','Лес/Бумага','BBG00RKBVVC2'],
+  ['GCHE','Черкизово','АПК','BBG004S68696'],
+  ['PRMD','Промомед','Медицина','BBG00Y91R9Q6'],
+  ['ZAYM','Займер','Финансы','BBG00Y91RBK6'],
+  ['CGPE','КарГоПро','Транспорт','BBG00Y91R8R3'],
+  ['MKOP','Микропроцессорные технологии','Технологии','BBG00ZZF7BY6'],
+  ['SELG','Селигдар','Металлы','BBG004S68598'],
+  ['UGLD','ЮГК (Южуралзолото)','Металлы','BBG00RPZXVN2'],
+  ['EUTR','ЕвроТранс','Транспорт','BBG00Y91RBJ5'],
+  ['OZPH','ОзонФарм','Медицина','BBG00Y91R9S8'],
+  ['LEAS','Европлан','Финансы','BBG00Y91RBM4'],
+  ['TRNFP','Транснефть (пр.)','Нефть и газ','BBG00475KHX6'],
+  ['BANEP','Башнефть (пр.)','Нефть и газ','BBG004S68BT3'],
+  ['BANE','Башнефть','Нефть и газ','BBG004S68BS4'],
+  ['HHRU','Хэдхантер','Технологии','BBG00ZZLP5B9'],
+  ['KLSB','Калужский сбытовой','Энергетика','BBG004S68B31'],
+  ['BRZL','Буровая компания','Нефть и газ','BBG004S68598'],
+  // 3 эшелон — металлургия и химия
+  ['CHMK','ЧМК (Челябинский МК)','3 эшелон',null],
+  ['AMEZ','Ашинский метзавод','3 эшелон',null],
+  ['KZOS','Казаньоргсинтез','3 эшелон',null],
+  ['NKNCP','Нижнеканскнефтехим (пр.)','3 эшелон',null],
+  ['NKNC','Нижнеканскнефтехим','3 эшелон',null],
+  // 3 эшелон — энергетика МРСК и ТГК
+  ['LSNG','Ленэнерго','3 эшелон Энерг.',null],
+  ['LSNGP','Ленэнерго (пр.)','3 эшелон Энерг.',null],
+  ['MRKV','МРСК Волги','3 эшелон Энерг.',null],
+  ['MRKU','МРСК Урала','3 эшелон Энерг.',null],
+  ['MRKC','МРСК Центра','3 эшелон Энерг.',null],
+  ['TGKB','ТГК-2','3 эшелон Энерг.',null],
+  // 3 эшелон — прочие
+  ['ARSA','Арсагера','3 эшелон',null],
+  ['CNTL','Центральный телеграф','3 эшелон',null],
+  // Neo-активы Т-Инвестиции (криптовалюты)
+  ['BTCUSDperpA','Neo Bitcoin (perp)','Neo Крипто',null],
+  ['ETHUSDperpA','Neo Ethereum (perp)','Neo Крипто',null],
+  ['SOLUSDperpA','Neo Solana (perp)','Neo Крипто',null],
+  ['XRPUSDperpA','Neo XRP (perp)','Neo Крипто',null],
+  ['TONUSDperpA','Neo TON (perp)','Neo Крипто',null],
+  ['DOGEUSDperpA','Neo Dogecoin (perp)','Neo Крипто',null],
+  ['BNBUSDperpA','Neo BNB (perp)','Neo Крипто',null],
+  ['LINKUSDperpA','Neo Chainlink (perp)','Neo Крипто',null],
+  ['AVAXUSDperpA','Neo Avalanche (perp)','Neo Крипто',null],
+  ['MATICUSDperpA','Neo Polygon (perp)','Neo Крипто',null],
+  ['ADAUSDperpA','Neo Cardano (perp)','Neo Крипто',null],
+  ['DOTUSDperpA','Neo Polkadot (perp)','Neo Крипто',null],
+  // (крипто-фьючерсы MOEX BTCM5/BTCU5 недоступны через Tinkoff API)
+  // Фьючерсы (обновлённые + классические)
+  ['MXM5','Фьючерс MoEx (июнь)','Фьючерсы',null],
+  ['MXU5','Фьючерс MoEx (сент)','Фьючерсы',null],
+  ['RIM5','Фьючерс RTS (июнь)','Фьючерсы',null],
+  ['RIU5','Фьючерс RTS (сент)','Фьючерсы',null],
+  ['BRM5','Фьючерс Brent (июнь)','Фьючерсы',null],
+  ['BRU5','Фьючерс Brent (сент)','Фьючерсы',null],
+  ['BRZ5','Фьючерс Brent (дек)','Фьючерсы',null],
+  ['GDM5','Фьючерс Золото (июнь)','Фьючерсы',null],
+  ['GDU5','Фьючерс Золото (сент)','Фьючерсы',null],
+  ['SiM5','Фьючерс USD/RUB (июнь)','Фьючерсы',null],
+  ['SiU5','Фьючерс USD/RUB (сент)','Фьючерсы',null],
+  ['SiZ5','Фьючерс USD/RUB (дек)','Фьючерсы',null],
+  ['EuM5','Фьючерс EUR/RUB (июнь)','Фьючерсы',null],
+  ['EuU5','Фьючерс EUR/RUB (сент)','Фьючерсы',null],
+  ['CNM5','Фьючерс CNY/RUB (июнь)','Фьючерсы',null],
+  ['CNU5','Фьючерс CNY/RUB (сент)','Фьючерсы',null],
+  ['GZM5','Фьючерс Газпром (июнь)','Фьючерсы',null],
+  ['GZU5','Фьючерс Газпром (сент)','Фьючерсы',null],
+  ['LKM5','Фьючерс Лукойл (июнь)','Фьючерсы',null],
+  ['LKU5','Фьючерс Лукойл (сент)','Фьючерсы',null],
+  ['SRM5','Фьючерс Сбербанк (июнь)','Фьючерсы',null],
+  ['SRU5','Фьючерс Сбербанк (сент)','Фьючерсы',null],
+  ['CLM5','Фьючерс WTI нефть (июнь)','Фьючерсы',null],
+  ['CLU5','Фьючерс WTI нефть (сент)','Фьючерсы',null],
+  ['NGM5','Фьючерс Природный газ (июнь)','Фьючерсы',null],
+  ['NGU5','Фьючерс Природный газ (сент)','Фьючерсы',null],
+  ['CUM5','Фьючерс Медь (июнь)','Фьючерсы',null],
+  ['ALM5','Фьючерс Алюминий (июнь)','Фьючерсы',null],
+  ['NKM5','Фьючерс Никель (июнь)','Фьючерсы',null],
+  ['PTM5','Фьючерс Платина (июнь)','Фьючерсы',null],
+  ['PDM5','Фьючерс Палладий (июнь)','Фьючерсы',null],
+  ['MMM5','Фьючерс МосБиржа мини (июнь)','Фьючерсы',null],
+  ['WHM5','Фьючерс Пшеница (июнь)','Фьючерсы',null],
+  ['SOM5','Фьючерс Соя (июнь)','Фьючерсы',null],
+  ['SVM5','Фьючерс Серебро (июнь)','Фьючерсы',null],
+  ['GKM5','Фьючерс Гонконг (июнь)','Фьючерсы',null],
+  // ETF / БПИФ на Мосбирже
+  ['TMOS','БПИФ Тинькофф Индекс МосБиржи','ETF/БПИФ','BBG00RPZXVP0'],
+  ['SBMX','БПИФ Сбер Индекс МосБиржи','ETF/БПИФ','BBG00RPZXVQ1'],
+  ['EQMX','БПИФ ВТБ Индекс МосБиржи','ETF/БПИФ','BBG00RPZXVR2'],
+  ['LQDT','БПИФ ВТБ Ликвидность','ETF/БПИФ','BBG00RPZXVS3'],
+  ['AKMB','БПИФ Альфа Облигации','ETF/БПИФ','BBG00RPZXVT4'],
+  ['TBRU','БПИФ Тинькофф Облигации','ETF/БПИФ','BBG00RPZXVU5'],
+  ['GOLD','БПИФ Тинькофф Золото','ETF/БПИФ','BBG00RPZXVV6'],
+  ['TGLD','БПИФ ВТБ Золото','ETF/БПИФ','BBG00RPZXVW7'],
+  ['SBGD','БПИФ Сбер Золото','ETF/БПИФ','BBG00RPZXVX8'],
+];
+
+
+// Дополнительные алиасы для поиска на русском
+const ALIASES = {
+  'сбер': 'SBER', 'сбербанк': 'SBER', 'втб': 'VTBR',
+  'газпром': 'GAZP', 'лукойл': 'LKOH', 'роснефть': 'ROSN',
+  'новатэк': 'NVTK', 'татнефть': 'TATN', 'норникель': 'GMKN',
+  'полюс': 'PLZL', 'алроса': 'ALRS', 'северсталь': 'CHMF',
+  'нлмк': 'NLMK', 'ммк': 'MAGN', 'русал': 'RUAL',
+  'яндекс': 'YNDX', 'магнит': 'MGNT', 'аэрофлот': 'AFLT',
+  'сургут': 'SNGS', 'интер рао': 'IRAO', 'пик': 'PIKK',
+  'самолет': 'SMLT', 'самолёт': 'SMLT', 'моex': 'MOEX',
+  'мосбиржа': 'MOEX', 'тинькофф': 'TCSG', 'т-банк': 'TCSG',
+  'озон': 'OZON', 'ozon': 'OZON', 'вк': 'VKCO',
+  'фосагро': 'PHOR', 'распадская': 'RASP', 'мтс': 'MTSS',
+  'биткоин': 'BTCUSDperpA', 'btc': 'BTCUSDperpA', 'биток': 'BTCUSDperpA', 'neo btc': 'BTCUSDperpA',
+  'эфир': 'ETHUSDperpA', 'ethereum': 'ETHUSDperpA', 'eth': 'ETHUSDperpA',
+  'xrp': 'XRPUSDperpA', 'рипл': 'XRPUSDperpA', 'ripple': 'XRPUSDperpA',
+  'solana': 'SOLUSDperpA', 'sol': 'SOLUSDperpA', 'солана': 'SOLUSDperpA',
+  'золото': 'GDM5', 'gold': 'GDM5',
+  'серебро': 'SVM5', 'silver': 'SVM5',
+  'нефть': 'BRM5', 'брент': 'BRM5', 'brent': 'BRM5',
+  'рубль': 'SiM5', 'доллар': 'SiM5', 'usd': 'SiM5',
+  'евро': 'EuM5', 'eur': 'EuM5',
+  'юань': 'CNM5', 'cny': 'CNM5',
+  'медь': 'CUM5', 'copper': 'CUM5',
+  'никель': 'NKM5', 'nickel': 'NKM5',
+  'индекс': 'MXM5', 'моекс': 'MXM5',
+  'rts': 'RIM5', 'ртс': 'RIM5',
+  'белуга': 'BELU', 'novabev': 'BELU',
+  'сегежа': 'SGZH', 'транснефть': 'TRNFP',
+  'башнефть': 'BANE', 'совкомфлот': 'FLOT',
+  'ростелеком': 'RTKM', 'интерао': 'IRAO',
+  'ленэнерго': 'LSNG', 'мрск': 'MRKV', 'тгк': 'TGKA',
+  'нкнх': 'NKNC', 'казаньоргсинтез': 'KZOS',
+  'чмк': 'CHMK', 'ашинский': 'AMEZ',
+  'иркутскэнерго': 'WTCM', 'кубаньэнерго': 'KUBE',
+  'арсагера': 'ARSA', 'звезда': 'ZVEZ',
+};
+
+// Все пары для быстрого выбора
+const ALL_PAIRS = [
+  // Банки
+  {a:'SBER',b:'VTBR',label:'SBER/VTBR — Сбер vs ВТБ',cat:'банки'},
+  {a:'SBER',b:'TCSG',label:'SBER/TCSG — Сбер vs Т-Банк',cat:'банки'},
+  {a:'MOEX',b:'TCSG',label:'MOEX/TCSG — Биржа vs Т-Банк',cat:'банки'},
+  {a:'VTBR',b:'BSPB',label:'VTBR/BSPB — ВТБ vs Банк СПб',cat:'банки'},
+  // Нефть и газ
+  {a:'LKOH',b:'TATN',label:'LKOH/TATN — Лукойл vs Татнефть',cat:'нефть'},
+  {a:'ROSN',b:'LKOH',label:'ROSN/LKOH — Роснефть vs Лукойл',cat:'нефть'},
+  {a:'GAZP',b:'NVTK',label:'GAZP/NVTK — Газпром vs Новатэк',cat:'нефть'},
+  {a:'LKOH',b:'BRM5',label:'LKOH/BRM5 — Лукойл vs Brent',cat:'нефть'},
+  // Металлы
+  {a:'GMKN',b:'CHMF',label:'GMKN/CHMF — Норникель vs Северсталь',cat:'металлы'},
+  {a:'NLMK',b:'CHMF',label:'NLMK/CHMF — НЛМК vs Северсталь',cat:'металлы'},
+  {a:'MAGN',b:'NLMK',label:'MAGN/NLMK — ММК vs НЛМК',cat:'металлы'},
+  {a:'PLZL',b:'GDM5',label:'PLZL/GDM5 — Полюс vs Золото',cat:'металлы'},
+  // Neo Крипто
+  {a:'BTCUSDperpA',b:'ETHUSDperpA',label:'BTC/ETH — Биткоин vs Эфир',cat:'крипто'},
+  {a:'BTCUSDperpA',b:'SOLUSDperpA',label:'BTC/SOL — Биткоин vs Solana',cat:'крипто'},
+  {a:'ETHUSDperpA',b:'SOLUSDperpA',label:'ETH/SOL — Эфир vs Solana',cat:'крипто'},
+  {a:'BTCUSDperpA',b:'XRPUSDperpA',label:'BTC/XRP — Биткоин vs XRP',cat:'крипто'},
+  {a:'BTCUSDperpA',b:'GDM5',label:'BTC/Золото — крипто vs золото',cat:'крипто'},
+  {a:'ETHUSDperpA',b:'BNBUSDperpA',label:'ETH/BNB — Эфир vs BNB',cat:'крипто'},
+  {a:'BTCUSDperpA',b:'SOLUSDperpA',label:'BTC/SOL — Биткоин vs Solana (2)',cat:'крипто'},
+  // Фьючерсы
+  {a:'BRM5',b:'CLM5',label:'Brent/WTI — два сорта нефти',cat:'фьючерсы'},
+  {a:'GDM5',b:'SVM5',label:'Золото/Серебро — драгметаллы',cat:'фьючерсы'},
+  {a:'RIM5',b:'MXM5',label:'RTS/МосБиржа — два индекса',cat:'фьючерсы'},
+  {a:'SiM5',b:'EuM5',label:'USD/EUR — две валюты',cat:'фьючерсы'},
+  {a:'BRM5',b:'NGM5',label:'Brent/Газ — энергоносители',cat:'фьючерсы'},
+  {a:'CUM5',b:'NKM5',label:'Медь/Никель — цветные металлы',cat:'фьючерсы'},
+  // Технологии
+  {a:'YNDX',b:'VKCO',label:'YNDX/VKCO — Яндекс vs VK',cat:'tech'},
+  {a:'YNDX',b:'OZON',label:'YNDX/OZON — Яндекс vs Ozon',cat:'tech'},
+  {a:'POSI',b:'ASTR',label:'POSI/ASTR — Позитив vs Астра',cat:'tech'},
+  {a:'OZON',b:'MGNT',label:'OZON/MGNT — Ozon vs Магнит',cat:'tech'},
+  // Разные
+  {a:'MGNT',b:'FIVE',label:'MGNT/FIVE — Магнит vs X5',cat:'разные'},
+  {a:'PIKK',b:'SMLT',label:'PIKK/SMLT — ПИК vs Самолёт',cat:'разные'},
+  {a:'MTSS',b:'RTKM',label:'MTSS/RTKM — МТС vs Ростелеком',cat:'разные'},
+  {a:'SBER',b:'GAZP',label:'SBER/GAZP — Сбер vs Газпром',cat:'разные'},
+  {a:'AFLT',b:'FLOT',label:'AFLT/FLOT — Аэрофлот vs Совкомфлот',cat:'разные'},
+  // 3 эшелон — энергетика (часто коррелируют внутри сектора)
+  {a:'LSNG',b:'LSNGP',label:'LSNG/LSNGP — Ленэнерго об. vs пр.',cat:'3эш'},
+  {a:'MRKV',b:'MRKU',label:'MRKV/MRKU — МРСК Волги vs Урала',cat:'3эш'},
+  {a:'MRKC',b:'MRKV',label:'MRKC/MRKV — МРСК Центра vs Волги',cat:'3эш'},
+  {a:'TGKA',b:'TGKB',label:'TGKA/TGKB — ТГК-1 vs ТГК-2',cat:'3эш'},
+  {a:'MSNG',b:'TGKA',label:'MSNG/TGKA — Мосэнерго vs ТГК-1',cat:'3эш'},
+  {a:'FEES',b:'LSNG',label:'FEES/LSNG — ФСК vs Ленэнерго',cat:'3эш'},
+  // 3 эшелон — химия
+  {a:'KZOS',b:'NKNC',label:'KZOS/NKNC — КазаньОС vs НКНХ',cat:'3эш'},
+  {a:'NKNC',b:'NKNCP',label:'NKNC/NKNCP — НКНХ об. vs пр.',cat:'3эш'},
+  // 3 эшелон — металлы
+  {a:'CHMK',b:'MAGN',label:'CHMK/MAGN — ЧМК vs ММК',cat:'3эш'},
+  {a:'AMEZ',b:'CHMK',label:'AMEZ/CHMK — Ашинский vs ЧМК',cat:'3эш'},
+];
+
+function renderPresets(filter='all'){
+  const grid = document.getElementById('presetsGrid');
+  if(!grid)return;
+  const pairs = filter==='all' ? ALL_PAIRS : ALL_PAIRS.filter(p=>p.cat===filter);
+  grid.innerHTML = pairs.map(p=>
+    `<button class="pb" onclick="setPair('${p.a}','${p.b}')">${p.label}</button>`
+  ).join('');
+}
+function filterPresets(cat){ renderPresets(cat); }
+
+// Кеш FIGI — предзаполняем из справочника
+const FIGI_CACHE = {};
+const FIGI_NAME_CACHE = {}; // имена инструментов от API
+// При старте заполняем кеш известными FIGI из ALL_INSTRUMENTS
+function initFigiCache(){
+  ALL_INSTRUMENTS.forEach(([ticker, name,, figi])=>{
+    if(figi) FIGI_CACHE[ticker]=figi;
+    FIGI_NAME_CACHE[ticker]=name;
+  });
+}
+ALL_INSTRUMENTS.forEach(([t,,, f])=>{ if(f) FIGI_CACHE[t]=f; });
+
+// Текущий выбор
+let selectedA = null, selectedB = null;
+
+const BASE='https://invest-public-api.tinkoff.ru/rest';
+const SANDBOX='https://sandbox-invest-public-api.tinkoff.ru/rest';
+let token=null, useSandbox=false;
+let pollTimer=null, corrHistory=[];
+let pricesA=[], pricesB=[], timesA=[];
+let ch1=null, ch2=null, ch3=null;
+let isReal=false;
+
+// ── Часы НСК ──
+function getMSKTime(){
+  return new Date().toLocaleTimeString('ru-RU',{timeZone:'Asia/Novosibirsk',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}
+function updateClock(){
+  document.getElementById('mskClock').textContent=getMSKTime();
+  const m=parseInt(new Date().toLocaleTimeString('ru-RU',{timeZone:'Asia/Novosibirsk',hour:'2-digit',minute:'2-digit',hour12:false}).replace(':',''));
+  const d=new Date().toLocaleDateString('ru-RU',{timeZone:'Asia/Novosibirsk',weekday:'short'});
+  const wd=d.toLowerCase().slice(0,2);
+  const isOpen=!['сб','вс'].includes(wd)&&m>=1400&&m<=2250;
+  const el=document.getElementById('marketStatus');
+  el.textContent=isOpen?'БИРЖА ОТКРЫТА':'БИРЖА ЗАКРЫТА';
+  el.className='market-status '+(isOpen?'open':'closed');
+}
+setInterval(updateClock,1000); updateClock(); initFigiCache();
+document.addEventListener('DOMContentLoaded', ()=>renderPresets('all'));
+
+// ──────────────────────────────────────────
+//  АВТО-СКАНЕР ПАР
+// ──────────────────────────────────────────
+let scanRunning = false;
+let scanAbort = false;
+
+// Строим список тикеров для сканирования по сектору
+function buildScanTickers(sector){
+  let instruments = ALL_INSTRUMENTS;
+  if(sector !== 'all'){
+    // фильтруем по категории
+    const catMap = {
+      'банки':['Банки'],
+      'нефть':['Нефть и газ'],
+      'металлы':['Металлы','Металлы 2эш'],
+      'крипто':['Neo Крипто'],
+      'фьючерсы':['Фьючерсы'],
+      'tech':['Технологии'],
+      '3эш':['3 эшелон','3 эшелон Энерг.'],
+      'энергетика':['Энергетика'],
+      'ритейл':['Ритейл'],
+      'транспорт':['Транспорт','Транспорт 2эш'],
+    };
+    const allowed = catMap[sector]||[];
+    instruments = instruments.filter(([t,n,s])=>allowed.includes(s));
+  } else {
+    // Для "все секторы" — исключаем ETF/БПИФ и фьючерсы (слишком много)
+    // но оставляем все акции + крипто
+    instruments = instruments.filter(([t,n,s])=>
+      !s.includes('Фьючерсы') && !s.includes('ETF') && !s.includes('SPBFUT') && !s.includes('TQOB')
+    );
+  }
+  return [...new Set(instruments.map(i=>i[0]))]; // уникальные тикеры
+}
+
+// Быстрый расчёт корреляции и лага — ИДЕНТИЧНО основному анализу
+// Использует приросты цен (returns), как crossCorr() в render()
+function quickAnalyze(cA, cB, maxLag){
+  const N = Math.min(cA.length, cB.length, 300);
+  if(N < 20) return null;
+  // Берём последние N свечей — та же логика что в основном анализе
+  const prA = cA.slice(-N).map(c=>c.price);
+  const prB = cB.slice(-N).map(c=>c.price);
+  // Приросты (как returns() в основном анализе)
+  const rA = prA.slice(1).map((v,i)=>v-prA[i]);
+  const rB = prB.slice(1).map((v,i)=>v-prB[i]);
+  if(rA.length < 15) return null;
+
+  let bestCorr = 0, bestLag = 0;
+  const lMax = Math.min(maxLag, 30);
+  for(let lag = 0; lag <= lMax; lag++){
+    const c = pearson(lag>0?rA.slice(0,-lag):rA, rB.slice(lag));
+    if(Math.abs(c) > Math.abs(bestCorr)){ bestCorr=c; bestLag=lag; }
+  }
+  const corr0 = pearson(rA, rB);
+  const gain = Math.abs(bestCorr) - Math.abs(corr0);
+  return { corr: bestCorr, lag: bestLag, corr0, gain, candles: N };
+}
+
+async function startScan(){
+  if(scanRunning) return;
+  if(!token && isReal){ addLog('Нужен токен для сканирования','err'); return; }
+
+  const sector = document.getElementById('scanSector').value;
+  const tickers = buildScanTickers(sector);
+  if(tickers.length < 2){ addLog('Недостаточно инструментов','warn'); return; }
+
+  const totalPairs = tickers.length*(tickers.length-1)/2;
+  addLog(`Сканер: ${tickers.length} тикеров → ${totalPairs} пар`, 'info');
+
+  scanRunning = true;
+  scanAbort = false;
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('scanStopBtn').style.display = '';
+  document.getElementById('scanProgress').style.display = '';
+  document.getElementById('scanResults').style.display = 'none';
+
+  // ШАГ 1: загружаем свечи по всем тикерам параллельно батчами по 5
+  const candleCache = {};
+  const BATCH = 5;
+  for(let i = 0; i < tickers.length; i += BATCH){
+    if(scanAbort) break;
+    const batch = tickers.slice(i, i+BATCH);
+    const pct = Math.round((i/tickers.length)*55);
+    document.getElementById('scanProgressBar').style.width = pct+'%';
+    document.getElementById('scanProgressPct').textContent = pct+'%';
+    document.getElementById('scanProgressText').textContent =
+      `Загружаем данные: ${i+1}–${Math.min(i+BATCH,tickers.length)} из ${tickers.length}...`;
+
+    await Promise.all(batch.map(async t => {
+      try{
+        const figi = await findFigi(t);
+        if(!figi){ candleCache[t]=[]; return; }
+        const scanPer = parseInt(document.getElementById('scanPeriod')?.value??'1');
+        const c = await fetchCandles(figi, scanPer);
+        candleCache[t] = c||[];
+      } catch(e){ candleCache[t]=[]; }
+    }));
+    // Показываем какие тикеры уже загружены
+    const loaded = Object.entries(candleCache).filter(([,v])=>v.length>0).map(([k])=>k);
+    document.getElementById('scanCurrentPair').textContent =
+      '✓ Загружено: ' + loaded.slice(-8).join(', ') + (loaded.length>8?'...':'');
+    await new Promise(r=>setTimeout(r,100));
+  }
+
+  if(scanAbort){ endScan(); return; }
+
+  // ШАГ 2: считаем все пары в памяти (быстро, без API)
+  document.getElementById('scanProgressText').textContent = `Анализируем ${totalPairs} пар...`;
+  const maxLag = parseInt(document.getElementById('lagRange').value) || 20;
+  const results = [];
+  let checked = 0;
+
+  // Чтобы не блокировать UI — разбиваем на чанки
+  const CHUNK = 200;
+  for(let i = 0; i < tickers.length; i++){
+    if(scanAbort) break;
+    for(let j = i+1; j < tickers.length; j++){
+      if(scanAbort) break;
+      const a = tickers[i], b = tickers[j];
+      const cA = candleCache[a]||[], cB = candleCache[b]||[];
+      if(cA.length >= 20 && cB.length >= 20){
+        const res = quickAnalyze(cA, cB, maxLag);
+        if(res && Math.abs(res.corr) >= 0.3) results.push({a, b, ...res});
+      }
+      checked++;
+      if(checked % CHUNK === 0){
+        const pct = 55 + Math.round((checked/totalPairs)*45);
+        document.getElementById('scanProgressBar').style.width = Math.min(pct,99)+'%';
+        document.getElementById('scanProgressPct').textContent = Math.min(pct,99)+'%';
+        document.getElementById('scanProgressText').textContent =
+          `Анализируем пары: ${checked.toLocaleString('ru')} из ${totalPairs.toLocaleString('ru')} · найдено ${results.length}`;
+        document.getElementById('scanCurrentPair').textContent =
+          `Сравниваем: ${a} ↔ ${b}`;
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+  }
+
+  // ШАГ 3: сортируем и показываем топ-10
+  results.sort((x,y)=>{
+    const sx = Math.abs(x.corr)*(1 + Math.max(0,x.gain));
+    const sy = Math.abs(y.corr)*(1 + Math.max(0,y.gain));
+    return sy - sx;
+  });
+
+  const topN = parseInt(document.getElementById('scanTopN').value)||10;
+  showScanResults(results.slice(0, topN===999?results.length:topN), tickers.length, checked, results.length);
+  endScan();
+}
+
+function stopScan(){
+  scanAbort = true;
+}
+
+function endScan(){
+  scanRunning = false;
+  document.getElementById('scanBtn').style.display = '';
+  document.getElementById('scanStopBtn').style.display = 'none';
+  document.getElementById('scanProgressBar').style.width = '100%';
+  document.getElementById('scanProgressPct').textContent = '100%';
+  document.getElementById('scanProgressText').textContent = 'Готово';
+}
+
+function showScanResults(results, tickerCount, checkedPairs, totalFound){
+  const list = document.getElementById('scanResultsList');
+
+  const scanPerVal = parseInt(document.getElementById('scanPeriod')?.value??'1');
+  const scanPerLabel = scanPerVal===0?'только сегодня':scanPerVal===1?'1 день':scanPerVal+' дней';
+  const header = `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+    <span style="font-size:11px;color:var(--muted)">Период: <b style="color:var(--accent)">${scanPerLabel}</b></span>
+    <span style="font-size:11px;color:var(--muted)">Тикеров: <b style="color:var(--text)">${tickerCount||0}</b></span>
+    <span style="font-size:11px;color:var(--muted)">Пар проверено: <b style="color:var(--text)">${(checkedPairs||0).toLocaleString('ru')}</b></span>
+    <span style="font-size:11px;color:var(--muted)">С корр. ≥0.3: <b style="color:var(--accent)">${totalFound||results.length}</b></span>
+    <span style="font-size:10px;color:var(--muted)">↓ Нажмите на пару чтобы выбрать для анализа</span>
+  </div>`;
+
+  if(!results.length){
+    list.innerHTML = header + '<div style="font-size:11px;color:var(--amber);padding:8px 0">Нет пар с корреляцией ≥0.3. Запустите в торговую сессию (10:00–18:50 НСК).</div>';
+    document.getElementById('scanResults').style.display = '';
+    return;
+  }
+
+  // Сетка карточек
+  const grid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
+    ${results.map((r,i)=>{
+      const corrPct = Math.round(Math.abs(r.corr)*100);
+      const color = Math.abs(r.corr)>=0.6?'var(--green)':Math.abs(r.corr)>=0.35?'var(--amber)':'var(--muted)';
+      const dir = r.corr>=0?'+':'−';
+      const lagMin = r.lag*5;
+      const nameA = (ALL_INSTRUMENTS.find(x=>x[0]===r.a)||[])[1]||r.a;
+      const nameB = (ALL_INSTRUMENTS.find(x=>x[0]===r.b)||[])[1]||r.b;
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return `<div class="scan-row" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px;border-radius:8px;border:1px solid var(--border)" onclick="applyScanPair('${r.a}','${r.b}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-size:10px;color:var(--muted)">${medal} #${i+1}</span>
+            <div style="font-size:13px;font-weight:600;color:var(--accent)">${r.a} / ${r.b}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:16px;font-weight:600;color:${color}">${dir}${Math.abs(r.corr).toFixed(2)}</div>
+            <div style="font-size:10px;color:var(--muted)">${r.lag>0?'лаг '+lagMin+' мин':'синхр.'}</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.4">${nameA}<br>${nameB}</div>
+        <div style="background:var(--surface);border-radius:2px;height:4px">
+          <div style="height:4px;border-radius:2px;background:${color};width:${corrPct}%"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted)">прирост от лага: ${r.gain>=0?'+':''}${r.gain.toFixed(2)} · ${r.candles} свечей</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  list.innerHTML = header + grid;
+  document.getElementById('scanResults').style.display = '';
+  addLog(`✓ Сканер: показано ${results.length} пар (всего найдено ${totalFound||results.length} с корр.≥0.3)`, 'ok');
+}
+
+function applyScanPair(a, b){
+  setPair(a, b);
+  addLog(`Пара выбрана: ${a} / ${b}. Нажмите СТАРТ для анализа.`,'info');
+}
+
+// ── Поиск тикеров ──
+function searchTicker(side){
+  const q = document.getElementById('search'+side).value.trim().toLowerCase();
+  const drop = document.getElementById('drop'+side);
+  if(!q){ drop.innerHTML=''; drop.classList.remove('show'); return; }
+
+  // Транслит для удобного поиска (сбер → sber и наоборот)
+  const translit = {'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'};
+  const toEn = s => s.split('').map(c=>translit[c]||c).join('');
+  const qEn = toEn(q);
+
+  // Ищем по алиасам
+  const aliasMatch = Object.keys(ALIASES).filter(a=>a.includes(q)).map(a=>ALIASES[a]);
+  
+  const results = ALL_INSTRUMENTS.filter(([t,n,s])=>
+    t.toLowerCase().includes(q) ||
+    n.toLowerCase().includes(q) ||
+    s.toLowerCase().includes(q) ||
+    t.toLowerCase().includes(qEn) ||
+    n.toLowerCase().includes(qEn) ||
+    aliasMatch.includes(t)
+  ).slice(0,20);
+
+  if(!results.length){ drop.innerHTML='<div class="ticker-item"><span class="nam">Ничего не найдено</span></div>'; drop.classList.add('show'); return; }
+
+  drop.innerHTML = results.map(([t,n,s,f])=>{
+    const lowLiq = s.includes('3 эшелон');
+    return `<div class="ticker-item" data-ticker="${t}" data-name="${n.replace(/"/g,'&quot;')}" data-sector="${s}" data-side="${side}">
+      <span class="tic">${t}</span>
+      <span class="nam">${n}</span>
+      <span class="sec" style="${lowLiq?'color:var(--amber,#ffab00)':''}">${lowLiq?'⚠ '+s:s}</span>
+    </div>`;
+  }).join('');
+  drop.classList.add('show');
+}
+
+function showDrop(side){
+  const q = document.getElementById('search'+side).value.trim();
+  if(q) document.getElementById('drop'+side).classList.add('show');
+}
+function hideDrop(side){ document.getElementById('drop'+side).classList.remove('show'); }
+
+// Глобальный обработчик кликов по дропдауну — самый надёжный способ
+document.addEventListener('click', function(e){
+  const item = e.target.closest('.ticker-item');
+  if(item){
+    const {side, ticker, name, sector} = item.dataset;
+    if(ticker && side) selectTicker(side, ticker, name, sector);
+    return;
+  }
+  // Клик вне дропдауна — скрыть все
+  if(!e.target.closest('.ticker-search-wrap')){
+    hideDrop('A'); hideDrop('B');
+  }
+});
+
+function selectTicker(side, ticker, name, sector){
+  if(side==='A') selectedA={ticker,name,sector};
+  else selectedB={ticker,name,sector};
+
+  document.getElementById('sel'+side+'-text').textContent = ticker+' — '+name;
+  document.getElementById('search'+side).value='';
+  document.getElementById('drop'+side).classList.remove('show');
+  // Refresh both displays to prevent visual glitches
+  if(selectedA) document.getElementById('selA-text').textContent = selectedA.ticker+' — '+selectedA.name;
+  if(selectedB) document.getElementById('selB-text').textContent = selectedB.ticker+' — '+selectedB.name;
+  addLog(`Выбран ${side==='A'?'лидер':'ведомый'}: ${ticker} (${name})`,'info');
+}
+
+function clearTicker(side){
+  if(side==='A') selectedA=null;
+  else selectedB=null;
+  document.getElementById('sel'+side+'-text').textContent='не выбран';
+  document.getElementById('search'+side).value='';
+}
+
+function setPair(a, b){
+  const instA = ALL_INSTRUMENTS.find(i=>i[0]===a);
+  const instB = ALL_INSTRUMENTS.find(i=>i[0]===b);
+  if(instA){ selectedA={ticker:instA[0],name:instA[1],sector:instA[2]}; document.getElementById('selA-text').textContent=instA[0]+' — '+instA[1]; document.getElementById('searchA').value=''; }
+  if(instB){ selectedB={ticker:instB[0],name:instB[1],sector:instB[2]}; document.getElementById('selB-text').textContent=instB[0]+' — '+instB[1]; document.getElementById('searchB').value=''; }
+  if(instA&&instB) addLog('Пара: '+instA[0]+' / '+instB[0],'info');
+}
+
+// ── Лог ──
+function addLog(msg,type=''){
+  const el=document.getElementById('logBody');
+  el.innerHTML=`<div class="ll"><span class="lt">${getMSKTime()}</span><span class="lm ${type}">${msg}</span></div>`+el.innerHTML;
+}
+
+// ── Статус ──
+function setStatus(s){
+  const map={live:['live','реалтайм'],sim:['sim','симуляция'],con:['','подключение...'],off:['','не подключено'],err:['err','ошибка']};
+  const[c,l]=map[s]||['',''];
+  document.getElementById('sDot').className='sdot '+c;
+  document.getElementById('sTxt').textContent=l;
+}
+
+// ── API ──
+function unitsNano(v){if(!v)return 0;return parseFloat((parseInt(v.units||0)+(parseInt(v.nano||0)/1e9)).toFixed(4));}
+
+async function apiPost(ep,body,sb=null){
+  const base=(sb!==null?sb:useSandbox)?SANDBOX:BASE;
+  const r=await fetch(base+ep,{method:'POST',mode:'cors',credentials:'omit',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text().catch(()=>'');throw new Error('HTTP '+r.status+': '+t.slice(0,80));}
+  return r.json();
+}
+
+async function apiTry(ep,body){
+  for(const sb of[useSandbox,!useSandbox]){
+    try{
+      const d=await Promise.race([
+        apiPost(ep,body,sb),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
+      ]);
+      return d;
+    }catch(e){}
+  }
+  return null;
+}
+
+async function connect(){
+  token=document.getElementById('tokenInput').value.trim();
+  if(!token){addLog('Введите токен','err');return;}
+  setStatus('con'); addLog('Проверяем токен...','info');
+  let accs=null;
+  for(const sb of[false,true]){
+    try{
+      const d=await apiPost('/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts',{},sb);
+      if(d&&d.accounts){accs=d.accounts;useSandbox=sb;break;}
+    }catch(e){}
+  }
+  if(!accs){addLog('Ошибка подключения. Проверь токен.','err');setStatus('err');token=null;return;}
+  isReal=true; setStatus('live');
+  addLog(`Подключено${useSandbox?' (Sandbox)':''}. Счетов: ${accs.length}`,'ok');
+  document.getElementById('discBtn').style.display='';
+}
+
+function disconnect(){token=null;isReal=false;setStatus('off');addLog('Отключено','warn');document.getElementById('discBtn').style.display='none';}
+
+async function findFigi(ticker){
+  // Если есть в кеше (в т.ч. из справочника ALL_INSTRUMENTS) — используем
+  if(FIGI_CACHE[ticker])return FIGI_CACHE[ticker];
+
+  // Попытка 1: GetInstrumentBy — ТОЧНЫЙ поиск по тикеру + площадке (не поиск по подстроке!)
+  // Перебираем все известные площадки
+  const classCodes = ['TQBR','RFUD','TQCR','CRYP','SPBFUT','FQBR','TQTF','TQOB','TQDE','TQIF'];
+  for(const cc of classCodes){
+    const d=await apiTry('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy',
+      {idType:'INSTRUMENT_ID_TYPE_TICKER',classCode:cc,id:ticker});
+    if(d&&d.instrument&&d.instrument.ticker===ticker){
+      // Дополнительно проверяем что нашли именно этот тикер
+      const id=d.instrument.figi;
+      FIGI_CACHE[ticker]=id;
+      FIGI_NAME_CACHE[ticker]=d.instrument.name||ticker;
+      return id;
+    }
+  }
+
+  // Попытка 2: FindInstrument — но берём ТОЛЬКО точное совпадение тикера, не первый результат
+  const d=await apiTry('/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument',
+    {query:ticker,instrumentKind:'INSTRUMENT_TYPE_UNSPECIFIED',apiTradeAvailableFlag:false});
+  if(d&&d.instruments){
+    // Строгое совпадение — тикер должен совпадать точно
+    const hit=d.instruments.find(i=>i.ticker===ticker);
+    if(hit){
+      const id=hit.figi||hit.uid;
+      FIGI_CACHE[ticker]=id;
+      FIGI_NAME_CACHE[ticker]=hit.name||ticker;
+      return id;
+    }
+    // Если точного совпадения нет — НЕ берём первый результат, возвращаем null
+  }
+  return null;
+}
+
+async function fetchCandles(figiOrUid, periodOverride){
+  const now=new Date(),from=new Date(now);
+  // Период берём из настройки
+  const periodDays = periodOverride !== undefined
+    ? periodOverride
+    : parseInt(document.getElementById('periodSelect')?.value||'1');
+  if(periodDays===0){
+    // Только сегодня: с 06:50 UTC (09:50 НСК) текущего дня
+    from.setHours(6,50,0,0);
+    if(from > now) from.setDate(from.getDate()-1);
+  } else {
+    from.setDate(from.getDate()-periodDays);
+  }
+  const base={from:from.toISOString(),to:now.toISOString(),interval:'CANDLE_INTERVAL_5_MIN'};
+  
+  // Определяем тип идентификатора: BBG/TCS = figi, иначе = uid/instrumentId
+  const isBBG = figiOrUid&&(figiOrUid.startsWith('BBG')||figiOrUid.startsWith('TCS'));
+  
+  // Пробуем оба поля
+  const attempts = isBBG
+    ? [{...base,figi:figiOrUid}, {...base,instrumentId:figiOrUid}]
+    : [{...base,instrumentId:figiOrUid}, {...base,figi:figiOrUid}];
+  
+  let candles = [];
+  for(const body of attempts){
+    const d=await apiTry('/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles',body);
+    if(d&&d.candles&&d.candles.length){candles=d.candles;break;}
+  }
+  // Если 5-мин свечей нет — пробуем дневные за 90 дней (для проверки что инструмент вообще есть)
+  if(!candles.length){
+    const from90=new Date(now); from90.setDate(from90.getDate()-90);
+    const dayBody={from:from90.toISOString(),to:now.toISOString(),interval:'CANDLE_INTERVAL_DAY'};
+    const attempts2 = isBBG
+      ? [{...dayBody,figi:figiOrUid},{...dayBody,instrumentId:figiOrUid}]
+      : [{...dayBody,instrumentId:figiOrUid},{...dayBody,figi:figiOrUid}];
+    for(const body of attempts2){
+      const d=await apiTry('/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles',body);
+      if(d&&d.candles&&d.candles.length){candles=d.candles;break;}
+    }
+  }
+  
+  if(!candles.length) return [];
+  return candles
+    .filter(c=>c.close&&(parseInt(c.close.units||0)!==0||parseInt(c.close.nano||0)!==0))
+    .map(c=>({
+      price:unitsNano(c.close),
+      time:new Date(c.time).toLocaleTimeString('ru-RU',{timeZone:'Asia/Novosibirsk',hour:'2-digit',minute:'2-digit'})
+    }));
+}
+
+// ── Симуляция ──
+let simBuf=[],simVal=100;
+function simTick(lag=10){
+  simVal+=(Math.random()-0.49)*0.5;
+  simBuf.push(simVal);
+  const b=simBuf.length>lag?simBuf[simBuf.length-lag-1]+(Math.random()-0.5)*0.4:simVal;
+  return{a:simVal,b};
+}
+
+// ── Математика ──
+function returns(arr){return arr.slice(1).map((v,i)=>v-arr[i]);}
+function pearson(x,y){
+  const n=Math.min(x.length,y.length);if(n<5)return 0;
+  const[xa,ya]=[x.slice(0,n),y.slice(0,n)];
+  const mx=xa.reduce((s,v)=>s+v,0)/n,my=ya.reduce((s,v)=>s+v,0)/n;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<n;i++){num+=(xa[i]-mx)*(ya[i]-my);dx+=(xa[i]-mx)**2;dy+=(ya[i]-my)**2;}
+  return Math.sqrt(dx*dy)<1e-12?0:num/Math.sqrt(dx*dy);
+}
+function crossCorr(maxLag){
+  const ra=returns(pricesA),rb=returns(pricesB);
+  return Array.from({length:maxLag+1},(_,lag)=>{
+    const xa=lag>0?ra.slice(0,-lag):ra,yb=rb.slice(lag);
+    return+pearson(xa,yb).toFixed(4);
+  });
+}
+
+// ── Запуск ──
+async function startAnalysis(){
+  if(!selectedA||!selectedB){addLog('Выберите оба тикера через поиск','err');return;}
+  if(selectedA.ticker===selectedB.ticker){addLog('Выберите разные тикеры','err');return;}
+  pricesA=[];pricesB=[];timesA=[];corrHistory=[];simBuf=[];simVal=100;
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('stopBtn').style.display='';
+  document.getElementById('legA').textContent=selectedA.ticker;
+  document.getElementById('legB').textContent=selectedB.ticker;
+  addLog(`Анализ: ${selectedA.ticker} (${selectedA.name}) / ${selectedB.ticker} (${selectedB.name})`,'info');
+  if(!isReal)addLog('Нет токена — демо-режим (случайные данные, не для торговли)','warn');
+  await tick();
+  const sec=parseInt(document.getElementById('intervalSel').value)||60;
+  pollTimer=setInterval(tick,sec*1000);
+}
+
+function stopAnalysis(){
+  clearInterval(pollTimer);pollTimer=null;
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stopBtn').style.display='none';
+  addLog('Анализ остановлен','warn');
+}
+
+async function tick(){
+  const a=selectedA.ticker, b=selectedB.ticker;
+  if(isReal&&token){
+    try{
+      addLog(`Загружаем данные: ${a} и ${b}...`,'info');
+      const figA=await findFigi(a);
+      if(!figA){addLog(`FIGI не найден: ${a}. Тикер недоступен через API.`,'err');return;}
+      const nameFromApi_A = FIGI_NAME_CACHE[a]||'';
+      addLog(`${a}: FIGI ${figA.slice(0,14)} → "${nameFromApi_A}", загружаем свечи...`,'info');
+      const figB=await findFigi(b);
+      if(!figB){addLog(`FIGI не найден: ${b}. Тикер недоступен через API.`,'err');return;}
+      const nameFromApi_B = FIGI_NAME_CACHE[b]||'';
+      addLog(`${b}: FIGI ${figB.slice(0,14)} → "${nameFromApi_B}", загружаем свечи...`,'info');
+      // Проверка: оба тикера не должны иметь одинаковый FIGI
+      if(figA===figB){
+        addLog(`⚠ ${a} и ${b} получили одинаковый FIGI (${figA.slice(0,14)}) — один из тикеров недоступен или неверно определён. Выберите другую пару.`,'err');
+        return;
+      }
+      const[cA,cB]=await Promise.all([fetchCandles(figA),fetchCandles(figB)]);
+      if(cA.length>5&&cB.length>5){
+        const n=Math.min(cA.length,cB.length);
+        pricesA=cA.slice(-n).map(c=>c.price);
+        pricesB=cB.slice(-n).map(c=>c.price);
+        timesA=cA.slice(-n).map(c=>c.time);
+        addLog(`✓ ${a}: ${cA.length} св. | ${b}: ${cB.length} св.`,'ok');
+      } else if(cA.length>0||cB.length>0){
+        addLog(`⚠ ${a}: ${cA.length} св., ${b}: ${cB.length} св. — недостаточно данных. Биржа закрыта или инструмент неликвиден. Ждём следующего обновления.`,'warn');
+      } else {
+        addLog(`✗ ${a}: 0 св., ${b}: 0 св. — данных нет. Возможно биржа закрыта или тикер не торгуется через этот API.`,'err');
+      }
+    }catch(e){addLog('Ошибка API: '+e.message,'err');}
+  }else{
+    // Нет токена — демо-режим со случайными данными
+    const{a:pa,b:pb}=simTick(10);
+    pricesA.push(pa);pricesB.push(pb);
+    timesA.push(getMSKTime());
+    if(pricesA.length>300){pricesA.shift();pricesB.shift();timesA.shift();}
+  }
+  if(pricesA.length>10)render();
+}
+
+// ── Рендер ──
+function render(){
+  const a=selectedA.ticker, b=selectedB.ticker;
+  const maxLag=parseInt(document.getElementById('lagRange').value)||30;
+  const corrs=crossCorr(maxLag);
+  const best=corrs.reduce((bi,v,i)=>Math.abs(v)>Math.abs(corrs[bi])?i:bi,0);
+  const gain=+(corrs[best]-corrs[0]).toFixed(4);
+  const now=getMSKTime();
+
+  document.getElementById('ptsBadge').textContent=pricesA.length+' тиков';
+  document.getElementById('timeBadge').textContent='обновл. '+now;
+  document.getElementById('mLag').textContent=best+' тиков';
+  setMet('mCorr',corrs[best]);setMet('mZero',corrs[0]);setMet('mGain',gain,true);
+  const periodHours = (timesA.length * 5 / 60).toFixed(1);
+  const periodDays = periodHours > 8 ? ` (~${Math.ceil(periodHours/6.5)} торг.дня)` : '';
+  document.getElementById('chartTime1').textContent='Обновл. '+now+' НСК · 5-мин. свечи · лаг '+best+'×5='+best*5+' мин · '+timesA.length+' тиков = '+periodHours+'ч'+periodDays;
+  document.getElementById('chartTime2').textContent=timesA.length>1?'Период: '+timesA[0]+' — '+timesA[timesA.length-1]+' НСК · '+timesA.length+' свечей ('+((timesA.length*5/60).toFixed(1))+'ч)':'—';
+  document.getElementById('chartTime3').textContent='История корреляции · '+now+' НСК';
+
+  corrHistory.push({t:now,v:corrs[best]});
+  if(corrHistory.length>80)corrHistory.shift();
+
+  const bgc=corrs.map((_,i)=>i===best?'#00e5ff':'rgba(0,229,255,0.25)');
+  if(ch1)ch1.destroy();
+  ch1=new Chart(document.getElementById('c1'),{type:'bar',data:{labels:corrs.map((_,i)=>i),datasets:[{data:corrs,backgroundColor:bgc,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` r = ${c.parsed.y.toFixed(4)}`},backgroundColor:'#161b22',borderColor:'rgba(255,255,255,.13)',borderWidth:1}},scales:{x:{ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Лаг (5-мин. тики)',color:'#5a6472',font:{size:10}}},y:{min:-1,max:1,ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  const last=100,pA=pricesA.slice(-last),pB=pricesB.slice(-last),tA=timesA.slice(-last);
+  const nm=arr=>{const mn=Math.min(...arr),mx=Math.max(...arr);return arr.map(v=>mx-mn<1e-9?0:(v-mn)/(mx-mn));};
+  if(ch2)ch2.destroy();
+  ch2=new Chart(document.getElementById('c2'),{type:'line',data:{labels:tA,datasets:[{data:nm(pA),borderColor:'#00e5ff',borderWidth:1.5,pointRadius:0,tension:0.3},{data:nm(pB),borderColor:'#e05c8a',borderWidth:1.5,pointRadius:0,tension:0.3,borderDash:[5,3]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a6472',maxTicksLimit:6,font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  if(ch3)ch3.destroy();
+  ch3=new Chart(document.getElementById('c3'),{type:'line',data:{labels:corrHistory.map(p=>p.t),datasets:[{data:corrHistory.map(p=>p.v),borderColor:'#00e676',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(0,230,118,0.06)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a6472',maxTicksLimit:4,font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}},y:{min:-1,max:1,ticks:{color:'#5a6472',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}}}});
+
+  const abs=Math.abs(corrs[best]);
+  const str=abs>0.6?'<b style="color:var(--green)">сильный</b>':abs>0.35?'<b style="color:var(--amber)">умеренный</b>':abs>0.15?'слабый':'незначимый';
+  const dir=corrs[best]>0?'в том же направлении':'в обратном направлении';
+  let txt;
+  if(abs<0.15)txt=`Значимой корреляции между <b>${a}</b> и <b>${b}</b> не обнаружено (r = ${corrs[best].toFixed(3)}). Движутся независимо.`;
+  else if(best===0)txt=`<b>${a}</b> и <b>${b}</b> движутся <b>синхронно</b> (лаг = 0, r = ${corrs[best].toFixed(3)}). Оба реагируют одновременно.`;
+  else{
+    const periodDays2 = parseInt(document.getElementById('periodSelect')?.value||'1');
+    const periodLabel = periodDays2===0?'сегодня':periodDays2===1?'1 день':periodDays2+' дней';
+    const lagWarn = best>12 && periodDays2>1 ? ` <span style="color:var(--amber)">⚠ Лаг ${best*5} мин на данных за ${periodLabel} может быть случайным — проверьте период "Только сегодня".</span>` : '';
+    txt=`Обнаружен ${str} lead-lag эффект: <b>${a} (${selectedA.name})</b> опережает <b>${b} (${selectedB.name})</b> на <b>${best} × 5 мин = ${best*5} минут</b> (r = ${corrs[best].toFixed(3)}). ${b} движется ${dir} с запозданием. Прирост: ${gain>0?'+':''}${gain}. ${abs>0.4?'Эффект статистически значим.':'Накапливайте больше данных.'}${lagWarn}`;
+  }
+  document.getElementById('interp').innerHTML=txt;
+}
+
+function setMet(id,v,isGain){
+  const el=document.getElementById(id);
+  el.textContent=(isGain&&v>0?'+':'')+v.toFixed(3);
+  el.className='mv '+(v>0.05?'g':v<-0.05?'r':'c');
+}
+</script>
+
+  <!-- АВТО-СКАНЕР — полная ширина под графиками -->
+  <div class="card" id="scannerCard" style="margin-top:0;border-radius:0 0 12px 12px;border-top:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div>
+        <div class="ct" style="margin-bottom:2px">🔍 АВТО-СКАНЕР ПАР</div>
+        <div style="font-size:10px;color:var(--muted)">Загружает свечи по всем инструментам и находит лучшие корреляции</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="scanSector" class="inp" style="font-size:11px;width:180px">
+          <option value="all">Все акции (без фьюч.)</option>
+          <option value="банки">Банки</option>
+          <option value="нефть">Нефть и газ</option>
+          <option value="металлы">Металлы</option>
+          <option value="энергетика">Энергетика</option>
+          <option value="tech">Технологии</option>
+          <option value="крипто">Neo Крипто</option>
+          <option value="фьючерсы">Фьючерсы</option>
+          <option value="3эш">3 эшелон</option>
+          <option value="транспорт">Транспорт</option>
+          <option value="ритейл">Ритейл</option>
+        </select>
+        <select id="scanPeriod" class="inp" style="font-size:11px;width:130px">
+          <option value="0">Только сегодня</option>
+          <option value="1" selected>1 день</option>
+          <option value="3">3 дня</option>
+          <option value="7">7 дней</option>
+        </select>
+        <select id="scanTopN" class="inp" style="font-size:11px;width:90px">
+          <option value="10">Топ 10</option>
+          <option value="20">Топ 20</option>
+          <option value="30">Топ 30</option>
+          <option value="50">Топ 50</option>
+          <option value="999">Все ≥0.3</option>
+        </select>
+        <button class="btn g" id="scanBtn" onclick="startScan()" style="font-size:11px;padding:7px 16px">▶ СКАНИРОВАТЬ</button>
+        <button class="btn r" id="scanStopBtn" onclick="stopScan()" style="font-size:11px;padding:7px 16px;display:none">■ СТОП</button>
+      </div>
+    </div>
+    <!-- Прогресс -->
+    <div id="scanProgress" style="display:none;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px">
+        <span id="scanProgressText">Проверяем...</span>
+        <span id="scanProgressPct">0%</span>
+      </div>
+      <div style="background:var(--surface);border-radius:4px;height:5px;overflow:hidden;margin-bottom:6px">
+        <div id="scanProgressBar" style="height:5px;background:var(--accent);width:0%;transition:width .2s;border-radius:4px"></div>
+      </div>
+      <div id="scanCurrentPair" style="font-size:10px;color:var(--accent);min-height:16px"></div>
+    </div>
+    <!-- Результаты -->
+    <div id="scanResults" style="display:none">
+      <div id="scanResultsList"></div>
+    </div>
+  </div>
+
+</body>
+</html>
